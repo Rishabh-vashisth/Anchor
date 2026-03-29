@@ -24,6 +24,10 @@ export function DumpPage({ tasks, onAdd, onCategorize, onDelete }: DumpPageProps
     if (input.trim()) {
       onAdd(input.trim());
       setInput('');
+      // Explicitly refocus to keep keyboard open on mobile
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
     }
   };
 
