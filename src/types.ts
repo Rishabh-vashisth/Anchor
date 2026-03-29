@@ -1,0 +1,30 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+export type TaskStatus = 'pending' | 'completed' | 'abandoned';
+export type Category = 'KEEP' | 'DELAY' | 'DELETE' | 'NONE';
+export type TimeBlockType = 'DEEP' | 'LIGHT' | 'FREE';
+
+export interface Task {
+  id: string;
+  text: string;
+  status: TaskStatus;
+  category: Category;
+  block?: TimeBlockType;
+  createdAt: number;
+  completedAt?: number;
+}
+
+export interface DailyState {
+  primaryTaskId: string | null;
+  tasks: Task[];
+  lastResetDate: string; // ISO date string
+}
+
+export interface WeeklyStats {
+  completed: number;
+  abandoned: number;
+  totalTimeSpent: number; // in minutes
+}
