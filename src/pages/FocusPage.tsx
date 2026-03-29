@@ -3,16 +3,18 @@ import { motion } from 'motion/react';
 import { Task } from '../types';
 import { FocusCard } from '../components/FocusCard';
 import { TaskItem } from '../components/TaskItem';
+import { Calendar } from '../components/Calendar';
 
 interface FocusPageProps {
   key?: string;
   primaryTask?: Task;
   tasks: Task[];
+  allTasks: Task[];
   onSetPrimary: (id: string) => void;
   onToggle: (id: string) => void;
 }
 
-export function FocusPage({ primaryTask, tasks, onSetPrimary, onToggle }: FocusPageProps) {
+export function FocusPage({ primaryTask, tasks, allTasks, onSetPrimary, onToggle }: FocusPageProps) {
   return (
     <motion.div 
       initial={{ opacity: 0, y: 10 }}
@@ -34,6 +36,10 @@ export function FocusPage({ primaryTask, tasks, onSetPrimary, onToggle }: FocusP
             </div>
           </div>
         )}
+      </section>
+
+      <section>
+        <Calendar tasks={allTasks} />
       </section>
 
       <section>

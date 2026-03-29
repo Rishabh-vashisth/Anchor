@@ -75,6 +75,7 @@ export default function App() {
               key="focus"
               primaryTask={primaryTask} 
               tasks={state.tasks.filter(t => t.category === 'KEEP')}
+              allTasks={state.tasks}
               onSetPrimary={handleSetPrimary}
               onToggle={toggleTaskStatus}
             />
