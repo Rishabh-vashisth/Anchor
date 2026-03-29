@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { DailyState, Task, Category, TaskStatus, TimeBlockType } from '../types';
+import { DailyState, Task, Category, TaskStatus, TimeBlockType, Idea, IdeaStatus } from '../types';
 
 const STORAGE_KEY = 'anchor_app_state';
 
@@ -17,13 +17,21 @@ export function useAnchorState() {
           ...parsed,
           primaryTaskId: null,
           lastResetDate: today,
+          ideas: parsed.ideas || [],
+          lastIdeaConvertedDate: parsed.lastIdeaConvertedDate || null,
         };
       }
-      return parsed;
+      return {
+        ...parsed,
+        ideas: parsed.ideas || [],
+        lastIdeaConvertedDate: parsed.lastIdeaConvertedDate || null,
+      };
     }
     return {
       primaryTaskId: null,
       tasks: [],
+      ideas: [],
+      lastIdeaConvertedDate: null,
       lastResetDate: new Date().toISOString().split('T')[0],
     };
   });
@@ -41,6 +49,58 @@ export function useAnchorState() {
       createdAt: Date.now(),
     };
     setState(prev => ({ ...prev, tasks: [newTask, ...prev.tasks] }));
+  };
+
+  const addIdea = (text: string) => {
+    const newIdea: Idea = {
+      id: crypto.randomUUID(),
+      text,
+      status: 'parked',
+      createdAt: Date.now(),
+    };
+    setState(prev => ({ ...prev, ideas: [newIdea, ...prev.ideas] }));
+  };
+
+  const processIdea = (id: string, action: 'EXECUTE' | 'DELAY' | 'DELETE') => {
+    const today = new Date().toISOString().split('T')[0];
+    
+    setState(prev => {
+      const idea = prev.ideas.find(i => i.id === id);
+      if (!idea) return prev;
+
+      if (action === 'EXECUTE') {
+        // Check if already converted an idea today
+        if (prev.lastIdeaConvertedDate === today) {
+          // This should be handled by UI, but as a guard:
+          return prev;
+        }
+
+        const newTask: Task = {
+          id: crypto.randomUUID(),
+          text: idea.text,
+          status: 'pending',
+          category: 'KEEP',
+          createdAt: Date.now(),
+        };
+
+        return {
+          ...prev,
+          tasks: [newTask, ...prev.tasks],
+          ideas: prev.ideas.map(i => i.id === id ? { ...i, status: 'executed', processedAt: Date.now() } : i),
+          lastIdeaConvertedDate: today
+        };
+      } else if (action === 'DELAY') {
+        return {
+          ...prev,
+          ideas: prev.ideas.map(i => i.id === id ? { ...i, status: 'delayed', processedAt: Date.now() } : i)
+        };
+      } else {
+        return {
+          ...prev,
+          ideas: prev.ideas.map(i => i.id === id ? { ...i, status: 'deleted', processedAt: Date.now() } : i)
+        };
+      }
+    });
   };
 
   const categorizeTask = (id: string, category: Category) => {
@@ -92,6 +152,8 @@ export function useAnchorState() {
   return {
     state,
     addTask,
+    addIdea,
+    processIdea,
     categorizeTask,
     setPrimaryTask,
     assignToBlock,
