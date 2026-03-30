@@ -6,6 +6,7 @@
 export type TaskStatus = 'pending' | 'completed' | 'abandoned';
 export type Category = 'KEEP' | 'DELAY' | 'DELETE' | 'NONE';
 export type TimeBlockType = 'DEEP' | 'LIGHT' | 'FREE';
+export type EodReason = 'TOO_BIG' | 'DISTRACTED' | 'DIDNT_START' | 'LOST_INTEREST';
 
 export interface Subtask {
   id: string;
@@ -42,6 +43,15 @@ export interface DailyState {
   ideas: Idea[];
   lastIdeaConvertedDate: string | null; // YYYY-MM-DD
   lastResetDate: string; // ISO date string
+  streak: number;
+  lastCheckDate: string | null;
+  isContinuingTask: boolean;
+  pendingEodCheck: {
+    date: string;
+    taskId: string;
+    taskText: string;
+    completed: boolean;
+  } | null;
 }
 
 export interface WeeklyStats {

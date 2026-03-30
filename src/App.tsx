@@ -22,6 +22,7 @@ import { DumpPage } from './pages/DumpPage';
 import { StatsPage } from './pages/StatsPage';
 import { IdeaCapture } from './components/IdeaCapture';
 import { IdeaParkingLot } from './components/IdeaParkingLot';
+import { EodCheckModal } from './components/EodCheckModal';
 
 type View = 'FOCUS' | 'BLOCKS' | 'DUMP' | 'PARKING' | 'STATS';
 
@@ -39,6 +40,7 @@ export default function App() {
     toggleSubtask,
     setTaskDependency,
     setTaskStartDate,
+    completeEodCheck,
     deleteTask, 
     abandonTask 
   } = useAnchorState();
@@ -80,6 +82,8 @@ export default function App() {
               primaryTask={primaryTask} 
               tasks={state.tasks?.filter(t => t.category === 'KEEP') || []}
               allTasks={state.tasks || []}
+              streak={state.streak}
+              isContinuingTask={state.isContinuingTask}
               onSetPrimary={handleSetPrimary}
               onToggle={toggleTaskStatus}
               onAddSubtask={addSubtask}
@@ -139,6 +143,13 @@ export default function App() {
         <NavButton active={currentView === 'PARKING'} onClick={() => setCurrentView('PARKING')} icon={<Lightbulb />} label="Parking" />
         <NavButton active={currentView === 'STATS'} onClick={() => setCurrentView('STATS')} icon={<BarChart3 />} label="Stats" />
       </nav>
+
+      {/* Modals */}
+      <EodCheckModal 
+        isOpen={!!state.pendingEodCheck}
+        taskText={state.pendingEodCheck?.taskText || ''}
+        onComplete={completeEodCheck}
+      />
 
       {/* Confirmation Modal */}
       <AnimatePresence>

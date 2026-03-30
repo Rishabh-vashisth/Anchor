@@ -10,6 +10,8 @@ interface FocusPageProps {
   primaryTask?: Task;
   tasks: Task[];
   allTasks: Task[];
+  streak: number;
+  isContinuingTask: boolean;
   onSetPrimary: (id: string) => void;
   onToggle: (id: string) => void;
   onAddSubtask: (taskId: string, title: string) => void;
@@ -22,6 +24,8 @@ export function FocusPage({
   primaryTask, 
   tasks = [], 
   allTasks = [], 
+  streak = 0,
+  isContinuingTask = false,
   onSetPrimary, 
   onToggle,
   onAddSubtask,
@@ -55,6 +59,21 @@ export function FocusPage({
       exit={{ opacity: 0, y: -10 }}
       className="space-y-12"
     >
+      <section className="flex justify-between items-end">
+        <div className="space-y-1">
+          <label className="text-[10px] font-mono text-white/40 uppercase tracking-[0.2em] block">Anchor</label>
+          {isContinuingTask && (
+            <p className="text-[10px] text-zinc-500 font-medium italic">Continuing yesterday's task</p>
+          )}
+        </div>
+        {streak > 0 && (
+          <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest flex items-center gap-1.5">
+            <div className="w-1 h-1 rounded-full bg-zinc-500" />
+            Honesty Streak: {streak}d
+          </div>
+        )}
+      </section>
+
       <section>
         {primaryTask ? (
           <FocusCard 
@@ -82,9 +101,14 @@ export function FocusPage({
 
       {activeTasks.length > 0 && (
         <section>
-          <label className="text-[10px] font-mono text-white/40 uppercase tracking-[0.2em] mb-4 block">Active Tasks</label>
+          <div className="flex justify-between items-center mb-4">
+            <label className="text-[10px] font-mono text-white/40 uppercase tracking-[0.2em] block">Active Tasks</label>
+            {activeTasks.length > 3 && (
+              <span className="text-[10px] font-mono text-white/20 uppercase">+{activeTasks.length - 3} hidden</span>
+            )}
+          </div>
           <div className="space-y-2">
-            {activeTasks.map(task => (
+            {activeTasks.slice(0, 3).map(task => (
               <TaskItem 
                 key={task.id} 
                 task={task} 

@@ -10,7 +10,8 @@ interface StatsPageProps {
 }
 
 export function StatsPage({ tasks = [] }: StatsPageProps) {
-  const completed = tasks.filter(t => t.status === 'completed').length;
+  const completedTasks = tasks.filter(t => t.status === 'completed');
+  const completed = completedTasks.length;
   const pending = tasks.filter(t => t.status === 'pending' && t.category === 'KEEP').length;
   
   const weeklyVerdict = () => {
@@ -66,6 +67,30 @@ export function StatsPage({ tasks = [] }: StatsPageProps) {
           {weeklyVerdict()}
         </p>
       </div>
+
+      {completedTasks.length > 0 && (
+        <section className="space-y-4">
+          <h3 className="text-[10px] font-mono text-white/40 uppercase tracking-[0.2em] block">Completed Tasks</h3>
+          <div className="space-y-2">
+            {completedTasks.sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0)).map(task => (
+              <div 
+                key={task.id}
+                className="p-4 border border-white/5 bg-white/[0.02] flex justify-between items-center group"
+              >
+                <div className="space-y-1">
+                  <p className="text-sm text-white/60 line-through decoration-white/20">{task.text}</p>
+                  {task.completedAt && (
+                    <p className="text-[10px] font-mono text-white/20 uppercase">
+                      Executed {new Date(task.completedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  )}
+                </div>
+                <CheckCircle2 className="w-4 h-4 text-white/20 group-hover:text-white/40 transition-colors" />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </motion.div>
   );
 }

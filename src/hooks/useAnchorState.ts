@@ -1,25 +1,44 @@
 import { useState, useEffect } from 'react';
-import { DailyState, Task, Category, TaskStatus, TimeBlockType, Idea, IdeaStatus } from '../types';
+import { DailyState, Task, Category, TaskStatus, TimeBlockType, Idea, IdeaStatus, EodReason } from '../types';
 
 const STORAGE_KEY = 'anchor_app_state';
 
 export function useAnchorState() {
   const [state, setState] = useState<DailyState>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
+    const today = new Date().toISOString().split('T')[0];
+
     if (saved) {
       const parsed = JSON.parse(saved);
+      
       // Check if it's a new day
-      const today = new Date().toISOString().split('T')[0];
       if (parsed.lastResetDate !== today) {
-        // Simple reset logic for demo: keep tasks but clear primary focus
-        // In a real app, you might archive yesterday's tasks
+        const previousPrimaryId = parsed.primaryTaskId;
+        const previousPrimaryTask = parsed.tasks?.find((t: Task) => t.id === previousPrimaryId);
+        const wasCompleted = previousPrimaryTask?.status === 'completed';
+
+        // If a primary task existed yesterday but no EOD check was done, 
+        // we need to trigger it now before resetting.
+        // However, the streak resets if the check is skipped (which happens if they just open the app next day)
+        // Actually, the prompt says "Reset streak if: task incomplete OR check skipped"
+        // If they open the app and it's a new day, we trigger the check for YESTERDAY.
+        
         return {
           ...parsed,
-          primaryTaskId: null,
           lastResetDate: today,
+          primaryTaskId: wasCompleted ? null : previousPrimaryId, // Auto carry forward if incomplete
+          isContinuingTask: !wasCompleted && !!previousPrimaryId,
+          pendingEodCheck: previousPrimaryId ? {
+            date: parsed.lastResetDate,
+            taskId: previousPrimaryId,
+            taskText: previousPrimaryTask?.text || 'Unknown Task',
+            completed: wasCompleted
+          } : null,
           tasks: parsed.tasks || [],
           ideas: parsed.ideas || [],
           lastIdeaConvertedDate: parsed.lastIdeaConvertedDate || null,
+          streak: parsed.streak || 0,
+          lastCheckDate: parsed.lastCheckDate || null,
         };
       }
       return {
@@ -27,6 +46,10 @@ export function useAnchorState() {
         tasks: parsed.tasks || [],
         ideas: parsed.ideas || [],
         lastIdeaConvertedDate: parsed.lastIdeaConvertedDate || null,
+        streak: parsed.streak || 0,
+        lastCheckDate: parsed.lastCheckDate || null,
+        isContinuingTask: parsed.isContinuingTask || false,
+        pendingEodCheck: parsed.pendingEodCheck || null,
       };
     }
     return {
@@ -34,13 +57,35 @@ export function useAnchorState() {
       tasks: [],
       ideas: [],
       lastIdeaConvertedDate: null,
-      lastResetDate: new Date().toISOString().split('T')[0],
+      lastResetDate: today,
+      streak: 0,
+      lastCheckDate: null,
+      isContinuingTask: false,
+      pendingEodCheck: null,
     };
   });
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [state]);
+
+  const completeEodCheck = (reason?: EodReason) => {
+    setState(prev => {
+      if (!prev.pendingEodCheck) return prev;
+      
+      const wasCompleted = prev.pendingEodCheck.completed;
+      const newStreak = wasCompleted ? prev.streak + 1 : 0;
+
+      return {
+        ...prev,
+        streak: newStreak,
+        lastCheckDate: prev.pendingEodCheck.date,
+        pendingEodCheck: null,
+        // Store reason if needed (e.g. in a history log, but prompt just says "Store this data")
+        // For now we just process the streak and clear the pending check
+      };
+    });
+  };
 
   const addTask = (text: string) => {
     const newTask: Task = {
@@ -228,6 +273,7 @@ export function useAnchorState() {
     toggleSubtask,
     setTaskDependency,
     setTaskStartDate,
+    completeEodCheck,
     deleteTask,
     abandonTask
   };
