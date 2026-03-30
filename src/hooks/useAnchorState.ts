@@ -17,12 +17,14 @@ export function useAnchorState() {
           ...parsed,
           primaryTaskId: null,
           lastResetDate: today,
+          tasks: parsed.tasks || [],
           ideas: parsed.ideas || [],
           lastIdeaConvertedDate: parsed.lastIdeaConvertedDate || null,
         };
       }
       return {
         ...parsed,
+        tasks: parsed.tasks || [],
         ideas: parsed.ideas || [],
         lastIdeaConvertedDate: parsed.lastIdeaConvertedDate || null,
       };
@@ -47,8 +49,11 @@ export function useAnchorState() {
       status: 'pending',
       category: 'NONE',
       createdAt: Date.now(),
+      subtasks: [],
+      dependsOn: null,
+      startDate: null,
     };
-    setState(prev => ({ ...prev, tasks: [newTask, ...prev.tasks] }));
+    setState(prev => ({ ...prev, tasks: [newTask, ...(prev.tasks || [])] }));
   };
 
   const addIdea = (text: string) => {
@@ -58,7 +63,7 @@ export function useAnchorState() {
       status: 'parked',
       createdAt: Date.now(),
     };
-    setState(prev => ({ ...prev, ideas: [newIdea, ...prev.ideas] }));
+    setState(prev => ({ ...prev, ideas: [newIdea, ...(prev.ideas || [])] }));
   };
 
   const processIdea = (id: string, action: 'EXECUTE' | 'DELAY' | 'DELETE') => {
@@ -81,6 +86,9 @@ export function useAnchorState() {
           status: 'pending',
           category: 'KEEP',
           createdAt: Date.now(),
+          subtasks: [],
+          dependsOn: null,
+          startDate: null,
         };
 
         return {
@@ -106,7 +114,7 @@ export function useAnchorState() {
   const categorizeTask = (id: string, category: Category) => {
     setState(prev => ({
       ...prev,
-      tasks: prev.tasks.map(t => t.id === id ? { ...t, category } : t)
+      tasks: (prev.tasks || []).map(t => t.id === id ? { ...t, category } : t)
     }));
   };
 
@@ -117,27 +125,85 @@ export function useAnchorState() {
   const assignToBlock = (id: string, block: TimeBlockType) => {
     setState(prev => ({
       ...prev,
-      tasks: prev.tasks.map(t => t.id === id ? { ...t, block } : t)
+      tasks: (prev.tasks || []).map(t => t.id === id ? { ...t, block } : t)
     }));
   };
 
   const toggleTaskStatus = (id: string) => {
+    setState(prev => {
+      const tasks = prev.tasks || [];
+      const task = tasks.find(t => t.id === id);
+      if (!task) return prev;
+
+      // Check dependency
+      if (task.dependsOn) {
+        const dependency = tasks.find(t => t.id === task.dependsOn);
+        if (dependency && dependency.status !== 'completed' && task.status !== 'completed') {
+          return prev; // Cannot complete if dependency is not completed
+        }
+      }
+
+      return {
+        ...prev,
+        tasks: tasks.map(t => {
+          if (t.id === id) {
+            const newStatus: TaskStatus = t.status === 'completed' ? 'pending' : 'completed';
+            return { ...t, status: newStatus, completedAt: newStatus === 'completed' ? Date.now() : undefined };
+          }
+          return t;
+        })
+      };
+    });
+  };
+
+  const addSubtask = (taskId: string, title: string) => {
     setState(prev => ({
       ...prev,
-      tasks: prev.tasks.map(t => {
-        if (t.id === id) {
-          const newStatus: TaskStatus = t.status === 'completed' ? 'pending' : 'completed';
-          return { ...t, status: newStatus, completedAt: newStatus === 'completed' ? Date.now() : undefined };
+      tasks: (prev.tasks || []).map(t => {
+        if (t.id === taskId && (t.subtasks || []).length < 5) {
+          return {
+            ...t,
+            subtasks: [...(t.subtasks || []), { id: crypto.randomUUID(), title, completed: false }]
+          };
         }
         return t;
       })
     }));
   };
 
+  const toggleSubtask = (taskId: string, subtaskId: string) => {
+    setState(prev => ({
+      ...prev,
+      tasks: (prev.tasks || []).map(t => {
+        if (t.id === taskId) {
+          return {
+            ...t,
+            subtasks: (t.subtasks || []).map(s => s.id === subtaskId ? { ...s, completed: !s.completed } : s)
+          };
+        }
+        return t;
+      })
+    }));
+  };
+
+  const setTaskDependency = (taskId: string, dependsOnId: string | null) => {
+    setState(prev => ({
+      ...prev,
+      tasks: (prev.tasks || []).map(t => t.id === taskId ? { ...t, dependsOn: dependsOnId } : t)
+    }));
+  };
+
+  const setTaskStartDate = (taskId: string, startDate: number | null) => {
+    setState(prev => ({
+      ...prev,
+      tasks: (prev.tasks || []).map(t => t.id === taskId ? { ...t, startDate } : t)
+    }));
+  };
+
   const deleteTask = (id: string) => {
     setState(prev => ({
       ...prev,
-      tasks: prev.tasks.filter(t => t.id !== id),
+      tasks: (prev.tasks || []).filter(t => t.id !== id),
       primaryTaskId: prev.primaryTaskId === id ? null : prev.primaryTaskId
     }));
   };
@@ -145,7 +211,7 @@ export function useAnchorState() {
   const abandonTask = (id: string) => {
     setState(prev => ({
       ...prev,
-      tasks: prev.tasks.map(t => t.id === id ? { ...t, status: 'abandoned' } : t)
+      tasks: (prev.tasks || []).map(t => t.id === id ? { ...t, status: 'abandoned' } : t)
     }));
   };
 
@@ -158,6 +224,10 @@ export function useAnchorState() {
     setPrimaryTask,
     assignToBlock,
     toggleTaskStatus,
+    addSubtask,
+    toggleSubtask,
+    setTaskDependency,
+    setTaskStartDate,
     deleteTask,
     abandonTask
   };

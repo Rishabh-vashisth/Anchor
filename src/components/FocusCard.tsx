@@ -1,16 +1,23 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Target, CheckCircle2, Circle, XCircle } from 'lucide-react';
+import { Target, CheckCircle2, Circle, XCircle, Clock } from 'lucide-react';
 import { Task } from '../types';
 
 interface FocusCardProps {
   task: Task;
   onToggle: (id: string) => void;
+  onToggleSubtask?: (taskId: string, subtaskId: string) => void;
 }
 
-export function FocusCard({ task, onToggle }: FocusCardProps) {
+export function FocusCard({ task, onToggle, onToggleSubtask, dependency }: FocusCardProps & { dependency?: Task | null }) {
   const isAbandoned = task.status === 'abandoned';
   const isCompleted = task.status === 'completed';
+  const isLocked = dependency && dependency.status !== 'completed' && !isCompleted;
+  const isFuture = task.startDate && task.startDate > Date.now() && !isCompleted;
+
+  const subtasks = task.subtasks || [];
+  const completedSubtasks = subtasks.filter(s => s.completed).length;
+  const totalSubtasks = subtasks.length;
 
   return (
     <div className="space-y-6">
@@ -35,12 +42,63 @@ export function FocusCard({ task, onToggle }: FocusCardProps) {
           {task.text}
         </h2>
 
+        {(isLocked || isFuture) && (
+          <div className="mb-8 p-4 border border-white/10 bg-white/[0.02] inline-block">
+            {isLocked ? (
+              <div className="flex items-center gap-2 text-red-400/60 font-mono text-[10px] uppercase tracking-widest">
+                <Target className="w-3 h-3" /> Prerequisite: {dependency?.text}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-blue-400/60 font-mono text-[10px] uppercase tracking-widest">
+                <Clock className="w-3 h-3" /> Not Active Yet (Starts {new Date(task.startDate!).toLocaleDateString()})
+              </div>
+            )}
+          </div>
+        )}
+
+        {totalSubtasks > 0 && !isCompleted && !isAbandoned && !isLocked && !isFuture && (
+          <div className="mb-8 space-y-3 max-w-xs mx-auto">
+            <div className="flex justify-between text-[10px] font-mono text-white/40 uppercase tracking-widest mb-1">
+              <span>Execution Progress</span>
+              <span>{completedSubtasks}/{totalSubtasks}</span>
+            </div>
+            <div className="h-1 bg-white/5 overflow-hidden">
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: `${(completedSubtasks / totalSubtasks) * 100}%` }}
+                className="h-full bg-white"
+              />
+            </div>
+            <div className="space-y-2 pt-2">
+              {subtasks.map(subtask => (
+                <button 
+                  key={subtask.id}
+                  onClick={() => onToggleSubtask && onToggleSubtask(task.id, subtask.id)}
+                  className="flex items-center gap-2 w-full text-left group/sub"
+                >
+                  {subtask.completed ? (
+                    <CheckCircle2 className="w-3 h-3 text-white/60" />
+                  ) : (
+                    <Circle className="w-3 h-3 text-white/20 group-hover/sub:text-white/40" />
+                  )}
+                  <span className={`text-[11px] ${subtask.completed ? 'text-white/20 line-through' : 'text-white/60'}`}>
+                    {subtask.title}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="flex justify-center">
           <button 
-            onClick={() => onToggle(task.id)}
+            onClick={() => !isLocked && !isFuture && onToggle(task.id)}
+            disabled={isLocked || isFuture}
             className={`flex items-center gap-3 py-4 px-8 border-2 transition-all uppercase font-black tracking-widest text-xs ${
               isCompleted ? 'bg-white text-black border-white' : 
-              isAbandoned ? 'border-white/20 text-white/40' : 'border-white text-white hover:bg-white hover:text-black'
+              isAbandoned ? 'border-white/20 text-white/40' : 
+              isLocked || isFuture ? 'border-white/10 text-white/10 cursor-not-allowed' :
+              'border-white text-white hover:bg-white hover:text-black'
             }`}
           >
             <AnimatePresence mode="wait">

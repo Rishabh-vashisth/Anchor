@@ -9,7 +9,7 @@ interface StatsPageProps {
   tasks: Task[];
 }
 
-export function StatsPage({ tasks }: StatsPageProps) {
+export function StatsPage({ tasks = [] }: StatsPageProps) {
   const completed = tasks.filter(t => t.status === 'completed').length;
   const pending = tasks.filter(t => t.status === 'pending' && t.category === 'KEEP').length;
   

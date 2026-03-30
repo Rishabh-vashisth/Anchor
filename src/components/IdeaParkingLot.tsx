@@ -10,7 +10,7 @@ interface IdeaParkingLotProps {
   canConvert: boolean;
 }
 
-export function IdeaParkingLot({ ideas, onProcess, canConvert }: IdeaParkingLotProps) {
+export function IdeaParkingLot({ ideas = [], onProcess, canConvert }: IdeaParkingLotProps) {
   const [selectedIdea, setSelectedIdea] = useState<Idea | null>(null);
   const [showRealityCheck, setShowRealityCheck] = useState(false);
   const [realityCheckStep, setRealityCheckStep] = useState(1);

@@ -7,12 +7,27 @@ import { TaskItem } from '../components/TaskItem';
 interface BlocksPageProps {
   key?: string;
   tasks: Task[];
+  allTasks: Task[];
   onAssign: (id: string, block: TimeBlockType) => void;
   onToggle: (id: string) => void;
   onAbandon: (id: string) => void;
+  onAddSubtask: (taskId: string, title: string) => void;
+  onToggleSubtask: (taskId: string, subtaskId: string) => void;
+  onSetDependency: (taskId: string, dependsOnId: string | null) => void;
+  onSetStartDate: (taskId: string, startDate: number | null) => void;
 }
 
-export function BlocksPage({ tasks, onAssign, onToggle, onAbandon }: BlocksPageProps) {
+export function BlocksPage({ 
+  tasks = [], 
+  allTasks = [], 
+  onAssign, 
+  onToggle, 
+  onAbandon,
+  onAddSubtask,
+  onToggleSubtask,
+  onSetDependency,
+  onSetStartDate
+}: BlocksPageProps) {
   const [activeTimer, setActiveTimer] = useState(false);
   const [timeLeft, setTimeLeft] = useState(25 * 60);
 
@@ -118,6 +133,12 @@ export function BlocksPage({ tasks, onAssign, onToggle, onAbandon }: BlocksPageP
                   task={task} 
                   onToggle={onToggle} 
                   onAbandon={onAbandon} 
+                  onAddSubtask={onAddSubtask}
+                  onToggleSubtask={onToggleSubtask}
+                  onSetDependency={onSetDependency}
+                  onSetStartDate={onSetStartDate}
+                  dependency={allTasks.find(at => at.id === task.dependsOn)}
+                  allTasks={allTasks}
                 />
               ))}
               

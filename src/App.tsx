@@ -35,6 +35,10 @@ export default function App() {
     setPrimaryTask, 
     assignToBlock, 
     toggleTaskStatus, 
+    addSubtask,
+    toggleSubtask,
+    setTaskDependency,
+    setTaskStartDate,
     deleteTask, 
     abandonTask 
   } = useAnchorState();
@@ -42,7 +46,7 @@ export default function App() {
   const [currentView, setCurrentView] = useState<View>('FOCUS');
   const [showSwitchConfirm, setShowSwitchConfirm] = useState<string | null>(null);
 
-  const primaryTask = state.tasks.find(t => t.id === state.primaryTaskId);
+  const primaryTask = state.tasks?.find(t => t.id === state.primaryTaskId);
   const today = new Date().toISOString().split('T')[0];
   const canConvertIdea = state.lastIdeaConvertedDate !== today;
 
@@ -74,25 +78,34 @@ export default function App() {
             <FocusPage 
               key="focus"
               primaryTask={primaryTask} 
-              tasks={state.tasks.filter(t => t.category === 'KEEP')}
-              allTasks={state.tasks}
+              tasks={state.tasks?.filter(t => t.category === 'KEEP') || []}
+              allTasks={state.tasks || []}
               onSetPrimary={handleSetPrimary}
               onToggle={toggleTaskStatus}
+              onAddSubtask={addSubtask}
+              onToggleSubtask={toggleSubtask}
+              onSetDependency={setTaskDependency}
+              onSetStartDate={setTaskStartDate}
             />
           )}
           {currentView === 'BLOCKS' && (
             <BlocksPage 
               key="blocks"
-              tasks={state.tasks.filter(t => t.category === 'KEEP')}
+              tasks={state.tasks?.filter(t => t.category === 'KEEP') || []}
+              allTasks={state.tasks || []}
               onAssign={assignToBlock}
               onToggle={toggleTaskStatus}
               onAbandon={abandonTask}
+              onAddSubtask={addSubtask}
+              onToggleSubtask={toggleSubtask}
+              onSetDependency={setTaskDependency}
+              onSetStartDate={setTaskStartDate}
             />
           )}
           {currentView === 'DUMP' && (
             <DumpPage 
               key="dump"
-              tasks={state.tasks.filter(t => t.category === 'NONE')}
+              tasks={state.tasks?.filter(t => t.category === 'NONE') || []}
               onAdd={addTask}
               onCategorize={categorizeTask}
               onDelete={deleteTask}
@@ -101,7 +114,7 @@ export default function App() {
           {currentView === 'PARKING' && (
             <IdeaParkingLot
               key="parking"
-              ideas={state.ideas}
+              ideas={state.ideas || []}
               onProcess={processIdea}
               canConvert={canConvertIdea}
             />
@@ -109,7 +122,7 @@ export default function App() {
           {currentView === 'STATS' && (
             <StatsPage 
               key="stats"
-              tasks={state.tasks}
+              tasks={state.tasks || []}
             />
           )}
         </AnimatePresence>

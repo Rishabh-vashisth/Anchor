@@ -55,8 +55,8 @@ export function Calendar({ tasks }: CalendarProps) {
       </div>
 
       <div className="grid grid-cols-7 gap-2">
-        {dayNames.map(name => (
-          <div key={name} className="text-[10px] font-mono text-white/20 text-center uppercase font-bold py-1">
+        {dayNames.map((name, i) => (
+          <div key={`${name}-${i}`} className="text-[10px] font-mono text-white/20 text-center uppercase font-bold py-1">
             {name}
           </div>
         ))}

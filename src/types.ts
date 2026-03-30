@@ -7,6 +7,12 @@ export type TaskStatus = 'pending' | 'completed' | 'abandoned';
 export type Category = 'KEEP' | 'DELAY' | 'DELETE' | 'NONE';
 export type TimeBlockType = 'DEEP' | 'LIGHT' | 'FREE';
 
+export interface Subtask {
+  id: string;
+  title: string;
+  completed: boolean;
+}
+
 export interface Task {
   id: string;
   text: string;
@@ -15,6 +21,9 @@ export interface Task {
   block?: TimeBlockType;
   createdAt: number;
   completedAt?: number;
+  subtasks: Subtask[];
+  dependsOn?: string | null;
+  startDate?: number | null;
 }
 
 export type IdeaStatus = 'parked' | 'executed' | 'deleted' | 'delayed';

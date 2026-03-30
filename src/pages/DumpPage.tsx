@@ -11,7 +11,7 @@ interface DumpPageProps {
   onDelete: (id: string) => void;
 }
 
-export function DumpPage({ tasks, onAdd, onCategorize, onDelete }: DumpPageProps) {
+export function DumpPage({ tasks = [], onAdd, onCategorize, onDelete }: DumpPageProps) {
   const [input, setInput] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
