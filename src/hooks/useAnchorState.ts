@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { DailyState, Task, Category, TaskStatus, TimeBlockType, Idea, IdeaStatus, EodReason } from '../types';
+import { DailyState, Task, Category, TaskStatus, TimeBlockType, Idea, IdeaStatus, EodReason, Reflection, ReflectionTag } from '../types';
 
 const STORAGE_KEY = 'anchor_app_state';
 
@@ -36,6 +36,7 @@ export function useAnchorState() {
           } : null,
           tasks: parsed.tasks || [],
           ideas: parsed.ideas || [],
+          reflections: parsed.reflections || [],
           lastIdeaConvertedDate: parsed.lastIdeaConvertedDate || null,
           streak: parsed.streak || 0,
           lastCheckDate: parsed.lastCheckDate || null,
@@ -45,6 +46,7 @@ export function useAnchorState() {
         ...parsed,
         tasks: parsed.tasks || [],
         ideas: parsed.ideas || [],
+        reflections: parsed.reflections || [],
         lastIdeaConvertedDate: parsed.lastIdeaConvertedDate || null,
         streak: parsed.streak || 0,
         lastCheckDate: parsed.lastCheckDate || null,
@@ -56,6 +58,7 @@ export function useAnchorState() {
       primaryTaskId: null,
       tasks: [],
       ideas: [],
+      reflections: [],
       lastIdeaConvertedDate: null,
       lastResetDate: today,
       streak: 0,
@@ -68,6 +71,19 @@ export function useAnchorState() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [state]);
+
+  const addReflection = (text: string, tag: ReflectionTag) => {
+    const newReflection: Reflection = {
+      id: crypto.randomUUID(),
+      text,
+      tag,
+      date: new Date().toISOString(),
+    };
+    setState(prev => ({
+      ...prev,
+      reflections: [newReflection, ...(prev.reflections || [])]
+    }));
+  };
 
   const completeEodCheck = (reason?: EodReason) => {
     setState(prev => {
@@ -274,6 +290,7 @@ export function useAnchorState() {
     setTaskDependency,
     setTaskStartDate,
     completeEodCheck,
+    addReflection,
     deleteTask,
     abandonTask
   };

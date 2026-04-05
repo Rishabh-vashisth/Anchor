@@ -1,18 +1,29 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { CheckCircle2, AlertCircle, Clock } from 'lucide-react';
-import { Task } from '../types';
+import { Task, Reflection } from '../types';
 import { StatCard } from '../components/ui/StatCard';
+import { Lightbulb, Bookmark, AlertTriangle } from 'lucide-react';
 
 interface StatsPageProps {
   key?: string;
   tasks: Task[];
+  reflections: Reflection[];
 }
 
-export function StatsPage({ tasks = [] }: StatsPageProps) {
+export function StatsPage({ tasks = [], reflections = [] }: StatsPageProps) {
   const completedTasks = tasks.filter(t => t.status === 'completed');
   const completed = completedTasks.length;
   const pending = tasks.filter(t => t.status === 'pending' && t.category === 'KEEP').length;
+  
+  const getTagIcon = (tag: string) => {
+    switch (tag) {
+      case 'Insight': return <Lightbulb className="w-3 h-3 text-blue-400" />;
+      case 'Reminder': return <Bookmark className="w-3 h-3 text-green-400" />;
+      case 'Mistake': return <AlertTriangle className="w-3 h-3 text-red-400" />;
+      default: return null;
+    }
+  };
   
   const weeklyVerdict = () => {
     if (completed === 0) return "Zero execution. Start now.";
@@ -67,6 +78,29 @@ export function StatsPage({ tasks = [] }: StatsPageProps) {
           {weeklyVerdict()}
         </p>
       </div>
+
+      {reflections.length > 0 && (
+        <section className="space-y-4">
+          <h3 className="text-[10px] font-mono text-white/40 uppercase tracking-[0.2em] block">Personal Reflections</h3>
+          <div className="space-y-3">
+            {reflections.map(reflection => (
+              <div 
+                key={reflection.id}
+                className="p-4 border border-white/5 bg-white/[0.01] space-y-2"
+              >
+                <div className="flex items-center gap-2">
+                  {getTagIcon(reflection.tag)}
+                  <span className="text-[9px] font-mono text-white/30 uppercase tracking-widest">{reflection.tag}</span>
+                  <span className="text-[9px] font-mono text-white/10 uppercase tracking-widest ml-auto">
+                    {new Date(reflection.date).toLocaleDateString()}
+                  </span>
+                </div>
+                <p className="text-sm text-white/70 leading-relaxed italic">"{reflection.text}"</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {completedTasks.length > 0 && (
         <section className="space-y-4">

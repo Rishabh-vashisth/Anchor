@@ -29,6 +29,15 @@ export interface Task {
 
 export type IdeaStatus = 'parked' | 'executed' | 'deleted' | 'delayed';
 
+export type ReflectionTag = 'Insight' | 'Reminder' | 'Mistake';
+
+export interface Reflection {
+  id: string;
+  text: string;
+  date: string;
+  tag: ReflectionTag;
+}
+
 export interface Idea {
   id: string;
   text: string;
@@ -41,6 +50,7 @@ export interface DailyState {
   primaryTaskId: string | null;
   tasks: Task[];
   ideas: Idea[];
+  reflections: Reflection[];
   lastIdeaConvertedDate: string | null; // YYYY-MM-DD
   lastResetDate: string; // ISO date string
   streak: number;

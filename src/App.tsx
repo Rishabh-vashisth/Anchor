@@ -23,6 +23,7 @@ import { StatsPage } from './pages/StatsPage';
 import { IdeaCapture } from './components/IdeaCapture';
 import { IdeaParkingLot } from './components/IdeaParkingLot';
 import { EodCheckModal } from './components/EodCheckModal';
+import { ReflectionCapture } from './components/ReflectionCapture';
 
 type View = 'FOCUS' | 'BLOCKS' | 'DUMP' | 'PARKING' | 'STATS';
 
@@ -41,6 +42,7 @@ export default function App() {
     setTaskDependency,
     setTaskStartDate,
     completeEodCheck,
+    addReflection,
     deleteTask, 
     abandonTask 
   } = useAnchorState();
@@ -82,6 +84,7 @@ export default function App() {
               primaryTask={primaryTask} 
               tasks={state.tasks?.filter(t => t.category === 'KEEP') || []}
               allTasks={state.tasks || []}
+              reflections={state.reflections || []}
               streak={state.streak}
               isContinuingTask={state.isContinuingTask}
               onSetPrimary={handleSetPrimary}
@@ -127,6 +130,7 @@ export default function App() {
             <StatsPage 
               key="stats"
               tasks={state.tasks || []}
+              reflections={state.reflections || []}
             />
           )}
         </AnimatePresence>
@@ -134,6 +138,7 @@ export default function App() {
 
       {/* Floating Capture */}
       <IdeaCapture onCapture={addIdea} />
+      <ReflectionCapture onCapture={addReflection} />
 
       {/* Navigation - Thumb Friendly */}
       <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto glass border-t border-white/10 flex justify-around p-4 pb-8 z-50">

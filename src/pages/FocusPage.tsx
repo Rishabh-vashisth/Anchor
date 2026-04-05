@@ -1,15 +1,17 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { motion } from 'motion/react';
-import { Task } from '../types';
+import { Task, Reflection } from '../types';
 import { FocusCard } from '../components/FocusCard';
 import { TaskItem } from '../components/TaskItem';
 import { Calendar } from '../components/Calendar';
+import { Lightbulb, Bookmark, AlertTriangle } from 'lucide-react';
 
 interface FocusPageProps {
   key?: string;
   primaryTask?: Task;
   tasks: Task[];
   allTasks: Task[];
+  reflections: Reflection[];
   streak: number;
   isContinuingTask: boolean;
   onSetPrimary: (id: string) => void;
@@ -24,6 +26,7 @@ export function FocusPage({
   primaryTask, 
   tasks = [], 
   allTasks = [], 
+  reflections = [],
   streak = 0,
   isContinuingTask = false,
   onSetPrimary, 
@@ -33,6 +36,21 @@ export function FocusPage({
   onSetDependency,
   onSetStartDate
 }: FocusPageProps) {
+  const randomReflection = useMemo(() => {
+    if (reflections.length === 0) return null;
+    // Use a simple hash of the date to keep the same reflection for the day if possible, 
+    // or just random for now as requested.
+    return reflections[Math.floor(Math.random() * reflections.length)];
+  }, [reflections]);
+
+  const getTagIcon = (tag: string) => {
+    switch (tag) {
+      case 'Insight': return <Lightbulb className="w-3 h-3 text-blue-400" />;
+      case 'Reminder': return <Bookmark className="w-3 h-3 text-green-400" />;
+      case 'Mistake': return <AlertTriangle className="w-3 h-3 text-red-400" />;
+      default: return null;
+    }
+  };
   const activeTasks = tasks.filter(t => {
     const isPrimary = t.id === primaryTask?.id;
     const isLocked = t.dependsOn && allTasks.find(at => at.id === t.dependsOn)?.status !== 'completed';
@@ -73,6 +91,17 @@ export function FocusPage({
           </div>
         )}
       </section>
+
+      {randomReflection && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-4 bg-white/[0.02] border border-white/5 flex items-start gap-3"
+        >
+          <div className="mt-0.5">{getTagIcon(randomReflection.tag)}</div>
+          <p className="text-xs text-white/60 leading-relaxed italic">"{randomReflection.text}"</p>
+        </motion.div>
+      )}
 
       <section>
         {primaryTask ? (
@@ -171,8 +200,15 @@ export function FocusPage({
       {activeTasks.length === 0 && lockedTasks.length === 0 && futureTasks.length === 0 && (
         <section>
           <label className="text-[10px] font-mono text-white/40 uppercase tracking-[0.2em] mb-4 block">Tasks</label>
-          <div className="p-8 border border-white/5 text-center">
-            <p className="text-white/20 text-[10px] uppercase font-bold tracking-widest">Clear Horizon</p>
+          <div className="p-8 border border-white/5 text-center space-y-4">
+            {randomReflection ? (
+              <div className="space-y-2">
+                <p className="text-white/20 text-[10px] uppercase font-bold tracking-widest">Reflection</p>
+                <p className="text-sm text-white/40 italic leading-relaxed">"{randomReflection.text}"</p>
+              </div>
+            ) : (
+              <p className="text-white/20 text-[10px] uppercase font-bold tracking-widest">Clear Horizon</p>
+            )}
           </div>
         </section>
       )}
