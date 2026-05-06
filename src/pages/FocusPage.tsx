@@ -1,9 +1,10 @@
 import React, { useMemo } from 'react';
 import { motion } from 'motion/react';
-import { Task, Reflection } from '../types';
+import { Task, Reflection, DailyTodo } from '../types';
 import { FocusCard } from '../components/FocusCard';
 import { TaskItem } from '../components/TaskItem';
 import { Calendar } from '../components/Calendar';
+import { DailyTodoList } from '../components/DailyTodoList';
 import { Lightbulb, Bookmark, AlertTriangle } from 'lucide-react';
 
 interface FocusPageProps {
@@ -12,6 +13,7 @@ interface FocusPageProps {
   tasks: Task[];
   allTasks: Task[];
   reflections: Reflection[];
+  dailyTodos: DailyTodo[];
   streak: number;
   isContinuingTask: boolean;
   onSetPrimary: (id: string) => void;
@@ -20,6 +22,9 @@ interface FocusPageProps {
   onToggleSubtask: (taskId: string, subtaskId: string) => void;
   onSetDependency: (taskId: string, dependsOnId: string | null) => void;
   onSetStartDate: (taskId: string, startDate: number | null) => void;
+  onAddDailyTodo: (text: string) => void;
+  onToggleDailyTodo: (id: string) => void;
+  onDeleteDailyTodo: (id: string) => void;
 }
 
 export function FocusPage({ 
@@ -27,6 +32,7 @@ export function FocusPage({
   tasks = [], 
   allTasks = [], 
   reflections = [],
+  dailyTodos = [],
   streak = 0,
   isContinuingTask = false,
   onSetPrimary, 
@@ -34,7 +40,10 @@ export function FocusPage({
   onAddSubtask,
   onToggleSubtask,
   onSetDependency,
-  onSetStartDate
+  onSetStartDate,
+  onAddDailyTodo,
+  onToggleDailyTodo,
+  onDeleteDailyTodo
 }: FocusPageProps) {
   const randomReflection = useMemo(() => {
     if (reflections.length === 0) return null;
@@ -127,6 +136,13 @@ export function FocusPage({
       <section>
         <Calendar tasks={allTasks} />
       </section>
+
+      <DailyTodoList 
+        todos={dailyTodos}
+        onAdd={onAddDailyTodo}
+        onToggle={onToggleDailyTodo}
+        onDelete={onDeleteDailyTodo}
+      />
 
       {activeTasks.length > 0 && (
         <section>

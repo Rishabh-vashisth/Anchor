@@ -46,11 +46,18 @@ export interface Idea {
   processedAt?: number;
 }
 
+export interface DailyTodo {
+  id: string;
+  text: string;
+  completed: boolean;
+}
+
 export interface DailyState {
   primaryTaskId: string | null;
   tasks: Task[];
   ideas: Idea[];
   reflections: Reflection[];
+  dailyTodos: { [date: string]: DailyTodo[] };
   lastIdeaConvertedDate: string | null; // YYYY-MM-DD
   lastResetDate: string; // ISO date string
   streak: number;

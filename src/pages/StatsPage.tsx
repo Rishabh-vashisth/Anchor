@@ -1,20 +1,31 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { CheckCircle2, AlertCircle, Clock } from 'lucide-react';
-import { Task, Reflection } from '../types';
+import { Task, Reflection, DailyTodo } from '../types';
 import { StatCard } from '../components/ui/StatCard';
-import { Lightbulb, Bookmark, AlertTriangle } from 'lucide-react';
+import { Lightbulb, Bookmark, AlertTriangle, Calendar as CalendarIcon, Check } from 'lucide-react';
 
 interface StatsPageProps {
   key?: string;
   tasks: Task[];
   reflections: Reflection[];
+  dailyTodos: { [date: string]: DailyTodo[] };
+  onToggleDailyTodo: (date: string, id: string) => void;
+  onDeleteDailyTodo: (date: string, id: string) => void;
 }
 
-export function StatsPage({ tasks = [], reflections = [] }: StatsPageProps) {
+export function StatsPage({ 
+  tasks = [], 
+  reflections = [], 
+  dailyTodos = {},
+  onToggleDailyTodo,
+  onDeleteDailyTodo
+}: StatsPageProps) {
   const completedTasks = tasks.filter(t => t.status === 'completed');
   const completed = completedTasks.length;
   const pending = tasks.filter(t => t.status === 'pending' && t.category === 'KEEP').length;
+  
+  const sortedDates = Object.keys(dailyTodos).sort((a, b) => b.localeCompare(a));
   
   const getTagIcon = (tag: string) => {
     switch (tag) {
@@ -78,6 +89,39 @@ export function StatsPage({ tasks = [], reflections = [] }: StatsPageProps) {
           {weeklyVerdict()}
         </p>
       </div>
+
+      {sortedDates.length > 0 && (
+        <section className="space-y-4">
+          <h3 className="text-[10px] font-mono text-white/40 uppercase tracking-[0.2em] block">Past Days</h3>
+          <div className="space-y-6">
+            {sortedDates.map(date => (
+              <div key={date} className="space-y-3">
+                <div className="flex items-center gap-2 border-b border-white/5 pb-2">
+                  <CalendarIcon className="w-3 h-3 text-white/20" />
+                  <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest">
+                    {new Date(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 gap-2 pl-4 border-l border-white/5">
+                  {(dailyTodos[date] || []).map(todo => (
+                    <div key={todo.id} className="flex items-center gap-3 group">
+                      <div className={`w-3 h-3 border flex items-center justify-center ${todo.completed ? 'bg-white border-white' : 'border-white/20'}`}>
+                        {todo.completed && <Check className="w-2 h-2 text-black" />}
+                      </div>
+                      <span className={`text-xs ${todo.completed ? 'text-white/20 line-through' : 'text-white/60'}`}>
+                        {todo.text}
+                      </span>
+                    </div>
+                  ))}
+                  {(dailyTodos[date] || []).length === 0 && (
+                    <span className="text-[10px] font-mono text-white/10 uppercase italic">Empty</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {reflections.length > 0 && (
         <section className="space-y-4">

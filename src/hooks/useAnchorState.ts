@@ -37,6 +37,7 @@ export function useAnchorState() {
           tasks: parsed.tasks || [],
           ideas: parsed.ideas || [],
           reflections: parsed.reflections || [],
+          dailyTodos: parsed.dailyTodos || {},
           lastIdeaConvertedDate: parsed.lastIdeaConvertedDate || null,
           streak: parsed.streak || 0,
           lastCheckDate: parsed.lastCheckDate || null,
@@ -47,6 +48,7 @@ export function useAnchorState() {
         tasks: parsed.tasks || [],
         ideas: parsed.ideas || [],
         reflections: parsed.reflections || [],
+        dailyTodos: parsed.dailyTodos || {},
         lastIdeaConvertedDate: parsed.lastIdeaConvertedDate || null,
         streak: parsed.streak || 0,
         lastCheckDate: parsed.lastCheckDate || null,
@@ -59,6 +61,7 @@ export function useAnchorState() {
       tasks: [],
       ideas: [],
       reflections: [],
+      dailyTodos: {},
       lastIdeaConvertedDate: null,
       lastResetDate: today,
       streak: 0,
@@ -71,6 +74,44 @@ export function useAnchorState() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [state]);
+
+  const addDailyTodo = (text: string) => {
+    const today = new Date().toISOString().split('T')[0];
+    const newTodo = {
+      id: crypto.randomUUID(),
+      text,
+      completed: false,
+    };
+    setState(prev => ({
+      ...prev,
+      dailyTodos: {
+        ...prev.dailyTodos,
+        [today]: [...(prev.dailyTodos[today] || []), newTodo]
+      }
+    }));
+  };
+
+  const toggleDailyTodo = (date: string, id: string) => {
+    setState(prev => ({
+      ...prev,
+      dailyTodos: {
+        ...prev.dailyTodos,
+        [date]: (prev.dailyTodos[date] || []).map(t => 
+          t.id === id ? { ...t, completed: !t.completed } : t
+        )
+      }
+    }));
+  };
+
+  const deleteDailyTodo = (date: string, id: string) => {
+    setState(prev => ({
+      ...prev,
+      dailyTodos: {
+        ...prev.dailyTodos,
+        [date]: (prev.dailyTodos[date] || []).filter(t => t.id !== id)
+      }
+    }));
+  };
 
   const addReflection = (text: string, tag: ReflectionTag) => {
     const newReflection: Reflection = {
@@ -291,6 +332,9 @@ export function useAnchorState() {
     setTaskStartDate,
     completeEodCheck,
     addReflection,
+    addDailyTodo,
+    toggleDailyTodo,
+    deleteDailyTodo,
     deleteTask,
     abandonTask
   };

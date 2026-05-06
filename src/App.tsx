@@ -43,6 +43,9 @@ export default function App() {
     setTaskStartDate,
     completeEodCheck,
     addReflection,
+    addDailyTodo,
+    toggleDailyTodo,
+    deleteDailyTodo,
     deleteTask, 
     abandonTask 
   } = useAnchorState();
@@ -53,6 +56,8 @@ export default function App() {
   const primaryTask = state.tasks?.find(t => t.id === state.primaryTaskId);
   const today = new Date().toISOString().split('T')[0];
   const canConvertIdea = state.lastIdeaConvertedDate !== today;
+
+  const currentDailyTodos = state.dailyTodos[today] || [];
 
   const handleSetPrimary = (id: string) => {
     if (state.primaryTaskId && state.primaryTaskId !== id) {
@@ -85,6 +90,7 @@ export default function App() {
               tasks={state.tasks?.filter(t => t.category === 'KEEP') || []}
               allTasks={state.tasks || []}
               reflections={state.reflections || []}
+              dailyTodos={currentDailyTodos}
               streak={state.streak}
               isContinuingTask={state.isContinuingTask}
               onSetPrimary={handleSetPrimary}
@@ -93,6 +99,9 @@ export default function App() {
               onToggleSubtask={toggleSubtask}
               onSetDependency={setTaskDependency}
               onSetStartDate={setTaskStartDate}
+              onAddDailyTodo={addDailyTodo}
+              onToggleDailyTodo={(id) => toggleDailyTodo(today, id)}
+              onDeleteDailyTodo={(id) => deleteDailyTodo(today, id)}
             />
           )}
           {currentView === 'BLOCKS' && (
@@ -131,6 +140,9 @@ export default function App() {
               key="stats"
               tasks={state.tasks || []}
               reflections={state.reflections || []}
+              dailyTodos={state.dailyTodos || {}}
+              onToggleDailyTodo={toggleDailyTodo}
+              onDeleteDailyTodo={deleteDailyTodo}
             />
           )}
         </AnimatePresence>
