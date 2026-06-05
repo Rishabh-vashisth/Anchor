@@ -1,6 +1,6 @@
 {
   "name": "Anchor",
-  "description": "A minimal, strict focus app for creative individuals to force clarity and reduce decision fatigue.",
+  "description": "A calm workspace that remembers what matters—helping you manage visual project nodes and resume deep work without context loss.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

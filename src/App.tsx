@@ -24,7 +24,9 @@ import {
   Zap,
   Bell,
   Cloud,
-  Flame
+  Flame,
+  Compass,
+  Archive
 } from 'lucide-react';
 import { useAnchorState } from './hooks/useAnchorState';
 import { DashboardPage } from './pages/DashboardPage';
@@ -34,13 +36,18 @@ import { GoalsPage } from './pages/GoalsPage';
 import { ReflectionsPage } from './pages/ReflectionsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { SyncPage } from './pages/SyncPage';
+import { TodayPage } from './pages/TodayPage';
+import { ProjectsPage } from './pages/ProjectsPage';
+import { CapturePage } from './pages/CapturePage';
+import { ReviewPage } from './pages/ReviewPage';
+import { LibraryPage } from './pages/LibraryPage';
 import { StreakDashboard } from './components/StreakDashboard';
 import { Confetti } from './components/Confetti';
 import { EodCheckModal } from './components/EodCheckModal';
 import { NotificationCenter } from './components/NotificationCenter';
 import { ReflectionTag } from './types';
 
-type View = 'DASHBOARD' | 'MANAGE' | 'INSIGHTS' | 'GOALS' | 'REFLECTIONS' | 'SETTINGS' | 'SYNC' | 'STREAKS';
+type View = 'TODAY' | 'PROJECTS' | 'CAPTURE' | 'REVIEW' | 'LIBRARY' | 'DASHBOARD' | 'MANAGE' | 'INSIGHTS' | 'GOALS' | 'REFLECTIONS' | 'SETTINGS' | 'SYNC' | 'STREAKS';
 
 export default function App() {
   const { 
@@ -97,7 +104,7 @@ export default function App() {
     saveGoogleCalendarEvents
   } = useAnchorState();
   
-  const [currentView, setCurrentView] = useState<View>('DASHBOARD');
+  const [currentView, setCurrentView] = useState<View>('TODAY');
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [showSwitchConfirm, setShowSwitchConfirm] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -133,14 +140,11 @@ export default function App() {
   };
 
   const navItems = [
-    { view: 'DASHBOARD' as View, label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
-    { view: 'STREAKS' as View, label: 'Streak Engine', icon: <Flame className="w-4 h-4 text-orange-500 animate-pulse" /> },
-    { view: 'MANAGE' as View, label: 'Manage Blocks', icon: <Sliders className="w-4 h-4" /> },
-    { view: 'INSIGHTS' as View, label: 'Insights Engine', icon: <BarChart3 className="w-4 h-4" /> },
-    { view: 'GOALS' as View, label: 'OKRs Goals', icon: <Target className="w-4 h-4 animate-pulse" /> },
-    { view: 'REFLECTIONS' as View, label: 'Reflections Log', icon: <BookOpen className="w-4 h-4" /> },
-    { view: 'SETTINGS' as View, label: 'Settings', icon: <Settings className="w-4 h-4" /> },
-    { view: 'SYNC' as View, label: 'Cloud Sync', icon: <Cloud className="w-4 h-4 text-orange-500" /> },
+    { view: 'TODAY' as View, label: 'Today', icon: <Compass className="w-4 h-4" /> },
+    { view: 'PROJECTS' as View, label: 'Projects', icon: <Target className="w-4 h-4 text-orange-500" /> },
+    { view: 'CAPTURE' as View, label: 'Capture', icon: <Zap className="w-4 h-4 text-amber-400" /> },
+    { view: 'REVIEW' as View, label: 'Review', icon: <BookOpen className="w-4 h-4 text-blue-400" /> },
+    { view: 'LIBRARY' as View, label: 'Library', icon: <Archive className="w-4 h-4 text-zinc-400" /> },
   ];
 
   // Quick Capture submissions handlers
@@ -181,7 +185,7 @@ export default function App() {
             <Menu className="w-4 h-4" />
           </button>
           
-          <div className="flex items-center gap-1.5 cursor-pointer" onClick={() => setCurrentView('DASHBOARD')}>
+          <div className="flex items-center gap-1.5 cursor-pointer" onClick={() => setCurrentView('TODAY')}>
             <Anchor className="w-4 h-4 text-orange-500" />
             <h1 className="text-xl font-black tracking-tighter uppercase text-white">Anchor</h1>
           </div>
@@ -207,6 +211,45 @@ export default function App() {
         </nav>
         
         <div className="flex items-center gap-2">
+          {/* Blocks manager Shortcut */}
+          <button
+            onClick={() => setCurrentView('MANAGE')}
+            className={`p-1 border transition-colors duration-150 outline-none w-6 h-6 flex items-center justify-center cursor-pointer ${
+              currentView === 'MANAGE'
+                ? 'bg-zinc-100 border-white text-black'
+                : 'border-white/10 hover:border-white/30 hover:bg-white/5 text-zinc-400 hover:text-white'
+            }`}
+            title="Manage Time Blocks Scheduling"
+          >
+            <Sliders className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Streak System Shortcut */}
+          <button
+            onClick={() => setCurrentView('STREAKS')}
+            className={`p-1 border transition-colors duration-150 outline-none w-6 h-6 flex items-center justify-center cursor-pointer ${
+              currentView === 'STREAKS'
+                ? 'bg-orange-600 border-orange-500 text-white'
+                : 'border-white/10 hover:border-white/30 hover:bg-white/5 text-orange-400'
+            }`}
+            title="Streak Rules & Milestones Status"
+          >
+            <Flame className="w-3.5 h-3.5" />
+          </button>
+
+          {/* Settings Shortcut */}
+          <button
+            onClick={() => setCurrentView('SETTINGS')}
+            className={`p-1 border transition-colors duration-150 outline-none w-6 h-6 flex items-center justify-center cursor-pointer ${
+              currentView === 'SETTINGS'
+                ? 'bg-zinc-100 border-white text-black'
+                : 'border-white/10 hover:border-white/30 hover:bg-white/5 text-zinc-400 hover:text-white'
+            }`}
+            title="Preferences & Reset Options"
+          >
+            <Settings className="w-3.5 h-3.5" />
+          </button>
+
           {/* Cloud Sync Status Indicator */}
           <button
             onClick={() => setCurrentView('SYNC')}
@@ -217,8 +260,8 @@ export default function App() {
             }`}
             title="Configure Cloud Backup Sync & view low-level telemetry"
           >
-            <Cloud className="w-3 h-3 text-orange-500" />
-            <span className="hidden sm:inline">CLOUD SYNCED</span>
+            <Cloud className="w-3 h-3" />
+            <span className="hidden sm:inline">CLOUD</span>
           </button>
 
           {/* Bell Icon Trigger */}
@@ -319,9 +362,9 @@ export default function App() {
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto p-4 md:p-8">
         <AnimatePresence mode="wait">
-          {currentView === 'DASHBOARD' && (
-            <DashboardPage
-              key="dashboard"
+          {currentView === 'TODAY' && (
+            <TodayPage
+              key="today"
               primaryTask={primaryTask}
               tasks={state.tasks?.filter(t => t.category === 'KEEP') || []}
               allTasks={state.tasks || []}
@@ -333,14 +376,10 @@ export default function App() {
               onSetPrimary={handleSetPrimary}
               onToggleTask={toggleTaskStatus}
               onAddSubtask={addSubtask}
-              onAddMultipleSubtasks={addMultipleSubtasks}
               onToggleSubtask={toggleSubtask}
               onAddDailyTodo={addDailyTodo}
               onToggleDailyTodo={(id) => toggleDailyTodo(today, id)}
               onDeleteDailyTodo={(id) => deleteDailyTodo(today, id)}
-              onSetStartDate={setTaskStartDate}
-              onSetDependency={setTaskDependency}
-              onLinkTaskToGoal={linkTaskToGoal}
               timeTrackingEnabled={state.timeTrackingEnabled !== undefined ? state.timeTrackingEnabled : true}
               timeLogs={state.timeLogs || []}
               dailyTimeBudget={state.dailyTimeBudget !== undefined ? state.dailyTimeBudget : 480}
@@ -349,9 +388,98 @@ export default function App() {
               onStopTimer={stopTimer}
               onAddManualTimeLog={addManualTimeLog}
               onUpdateTaskEstimate={updateTaskEstimate}
-              googleCalendarSettings={state.googleCalendarSettings}
-              googleCalendarEvents={state.googleCalendarEvents || []}
-              timeBlocks={state.timeBlocks || []}
+              onQuickCapture={(type, text) => {
+                if (type === 'TASK') addTask(text);
+                else if (type === 'IDEA') addIdea(text);
+                else addReflection(text, 'Insight');
+              }}
+              onSwitchView={(v) => setCurrentView(v)}
+            />
+          )}
+
+          {currentView === 'PROJECTS' && (
+            <ProjectsPage
+              key="projects"
+              goals={state.goals || []}
+              allTasks={state.tasks || []}
+              onAddGoal={addGoal}
+              onEditGoal={editGoal}
+              onUpdateGoalStatus={updateGoalStatus}
+              onToggleKeyResult={toggleGoalKeyResult}
+              onDeleteGoal={deleteGoal}
+              onAddTask={addTask}
+              onSetPrimary={handleSetPrimary}
+            />
+          )}
+
+          {currentView === 'CAPTURE' && (
+            <CapturePage
+              key="capture"
+              tasks={state.tasks || []}
+              ideas={state.ideas || []}
+              reflections={state.reflections || []}
+              onAddTask={addTask}
+              onAddIdea={addIdea}
+              onAddReflection={addReflection}
+            />
+          )}
+
+          {currentView === 'REVIEW' && (
+            <ReviewPage
+              key="review"
+              tasks={state.tasks || []}
+              reflections={state.reflections || []}
+              dailyTodos={state.dailyTodos || {}}
+              timeLogs={state.timeLogs || []}
+              onAddReflection={addReflection}
+              onDeleteReflection={deleteReflection}
+            />
+          )}
+
+          {currentView === 'LIBRARY' && (
+            <LibraryPage
+              key="library"
+              goals={state.goals || []}
+              tasks={state.tasks || []}
+              ideas={state.ideas || []}
+              reflections={state.reflections || []}
+              onDeleteGoal={deleteGoal}
+              onDeleteTask={deleteTask}
+            />
+          )}
+
+          {currentView === 'DASHBOARD' && (
+            <TodayPage
+              key="today-legacy"
+              primaryTask={primaryTask}
+              tasks={state.tasks?.filter(t => t.category === 'KEEP') || []}
+              allTasks={state.tasks || []}
+              dailyTodos={currentDailyTodos}
+              streak={state.streak}
+              isContinuingTask={state.isContinuingTask}
+              reflections={state.reflections || []}
+              goals={state.goals || []}
+              onSetPrimary={handleSetPrimary}
+              onToggleTask={toggleTaskStatus}
+              onAddSubtask={addSubtask}
+              onToggleSubtask={toggleSubtask}
+              onAddDailyTodo={addDailyTodo}
+              onToggleDailyTodo={(id) => toggleDailyTodo(today, id)}
+              onDeleteDailyTodo={(id) => deleteDailyTodo(today, id)}
+              timeTrackingEnabled={state.timeTrackingEnabled !== undefined ? state.timeTrackingEnabled : true}
+              timeLogs={state.timeLogs || []}
+              dailyTimeBudget={state.dailyTimeBudget !== undefined ? state.dailyTimeBudget : 480}
+              activeTimer={state.activeTimer}
+              onStartTimer={startTimer}
+              onStopTimer={stopTimer}
+              onAddManualTimeLog={addManualTimeLog}
+              onUpdateTaskEstimate={updateTaskEstimate}
+              onQuickCapture={(type, text) => {
+                if (type === 'TASK') addTask(text);
+                else if (type === 'IDEA') addIdea(text);
+                else addReflection(text, 'Insight');
+              }}
+              onSwitchView={(v) => setCurrentView(v)}
             />
           )}
 
@@ -387,20 +515,20 @@ export default function App() {
           )}
 
           {currentView === 'INSIGHTS' && (
-            <InsightsPage
-              key="insights"
+            <ReviewPage
+              key="review-legacy-insights"
               tasks={state.tasks || []}
               reflections={state.reflections || []}
               dailyTodos={state.dailyTodos || {}}
-              timeTrackingEnabled={state.timeTrackingEnabled !== undefined ? state.timeTrackingEnabled : true}
               timeLogs={state.timeLogs || []}
-              dailyTimeBudget={state.dailyTimeBudget !== undefined ? state.dailyTimeBudget : 480}
+              onAddReflection={addReflection}
+              onDeleteReflection={deleteReflection}
             />
           )}
 
           {currentView === 'GOALS' && (
-            <GoalsPage
-              key="goals"
+            <ProjectsPage
+              key="projects-legacy"
               goals={state.goals || []}
               allTasks={state.tasks || []}
               onAddGoal={addGoal}
@@ -408,16 +536,18 @@ export default function App() {
               onUpdateGoalStatus={updateGoalStatus}
               onToggleKeyResult={toggleGoalKeyResult}
               onDeleteGoal={deleteGoal}
-              onAddMultipleSubtasks={addMultipleSubtasks}
               onAddTask={addTask}
+              onSetPrimary={handleSetPrimary}
             />
           )}
 
           {currentView === 'REFLECTIONS' && (
-            <ReflectionsPage
-              key="reflections"
+            <ReviewPage
+              key="review-legacy-ref"
+              tasks={state.tasks || []}
               reflections={state.reflections || []}
-              allTasks={state.tasks || []}
+              dailyTodos={state.dailyTodos || {}}
+              timeLogs={state.timeLogs || []}
               onAddReflection={addReflection}
               onDeleteReflection={deleteReflection}
             />
