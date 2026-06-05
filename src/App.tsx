@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Anchor, 
@@ -21,7 +21,10 @@ import {
   Lightbulb,
   Bookmark,
   AlertTriangle,
-  Zap
+  Zap,
+  Bell,
+  Cloud,
+  Flame
 } from 'lucide-react';
 import { useAnchorState } from './hooks/useAnchorState';
 import { DashboardPage } from './pages/DashboardPage';
@@ -30,10 +33,14 @@ import { InsightsPage } from './pages/InsightsPage';
 import { GoalsPage } from './pages/GoalsPage';
 import { ReflectionsPage } from './pages/ReflectionsPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { SyncPage } from './pages/SyncPage';
+import { StreakDashboard } from './components/StreakDashboard';
+import { Confetti } from './components/Confetti';
 import { EodCheckModal } from './components/EodCheckModal';
+import { NotificationCenter } from './components/NotificationCenter';
 import { ReflectionTag } from './types';
 
-type View = 'DASHBOARD' | 'MANAGE' | 'INSIGHTS' | 'GOALS' | 'REFLECTIONS' | 'SETTINGS';
+type View = 'DASHBOARD' | 'MANAGE' | 'INSIGHTS' | 'GOALS' | 'REFLECTIONS' | 'SETTINGS' | 'SYNC' | 'STREAKS';
 
 export default function App() {
   const { 
@@ -46,10 +53,13 @@ export default function App() {
     assignToBlock, 
     toggleTaskStatus, 
     addSubtask,
+    addMultipleSubtasks,
     toggleSubtask,
     setTaskDependency,
     setTaskStartDate,
     completeEodCheck,
+    updateStreakRule,
+    updateStreak,
     addReflection,
     deleteReflection,
     addDailyTodo,
@@ -69,12 +79,38 @@ export default function App() {
     updateTaskEstimate,
     toggleTimeTracking,
     updateDailyTimeBudget,
-    resetAllState
+    addTimeBlock,
+    updateTimeBlock,
+    deleteTimeBlock,
+    applyBlockTemplate,
+    saveBlockAsTemplate,
+    updateNotificationSettings,
+    addNotification,
+    markNotificationAsRead,
+    markAllNotificationsAsRead,
+    clearNotifications,
+    resetAllState,
+    updateGoogleCalendarSettings,
+    disconnectCalendar,
+    addGoogleSyncLog,
+    clearGoogleSyncLogs,
+    saveGoogleCalendarEvents
   } = useAnchorState();
   
   const [currentView, setCurrentView] = useState<View>('DASHBOARD');
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [showSwitchConfirm, setShowSwitchConfirm] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const [showCelebrationConfetti, setShowCelebrationConfetti] = useState(false);
+  const prevStreakRef = useRef(state.streak || 0);
+
+  useEffect(() => {
+    if (state.streak > prevStreakRef.current && prevStreakRef.current !== undefined) {
+      setShowCelebrationConfetti(true);
+    }
+    prevStreakRef.current = state.streak || 0;
+  }, [state.streak]);
 
   // States for Unified Quick Capture Drawer
   const [isQuickCaptureOpen, setIsQuickCaptureOpen] = useState(false);
@@ -98,11 +134,13 @@ export default function App() {
 
   const navItems = [
     { view: 'DASHBOARD' as View, label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
+    { view: 'STREAKS' as View, label: 'Streak Engine', icon: <Flame className="w-4 h-4 text-orange-500 animate-pulse" /> },
     { view: 'MANAGE' as View, label: 'Manage Blocks', icon: <Sliders className="w-4 h-4" /> },
     { view: 'INSIGHTS' as View, label: 'Insights Engine', icon: <BarChart3 className="w-4 h-4" /> },
-    { view: 'GOALS' as View, label: 'OKRs Goals', icon: <Target className="w-4 h-4" /> },
+    { view: 'GOALS' as View, label: 'OKRs Goals', icon: <Target className="w-4 h-4 animate-pulse" /> },
     { view: 'REFLECTIONS' as View, label: 'Reflections Log', icon: <BookOpen className="w-4 h-4" /> },
     { view: 'SETTINGS' as View, label: 'Settings', icon: <Settings className="w-4 h-4" /> },
+    { view: 'SYNC' as View, label: 'Cloud Sync', icon: <Cloud className="w-4 h-4 text-orange-500" /> },
   ];
 
   // Quick Capture submissions handlers
@@ -168,8 +206,36 @@ export default function App() {
           })}
         </nav>
         
-        <div className="text-[9px] font-mono text-zinc-500 bg-white/[0.02] border border-white/5 py-0.5 px-2.5 uppercase tracking-wider">
-          {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+        <div className="flex items-center gap-2">
+          {/* Cloud Sync Status Indicator */}
+          <button
+            onClick={() => setCurrentView('SYNC')}
+            className={`p-1 px-2 border transition-all duration-150 outline-none h-6 flex items-center justify-center cursor-pointer gap-1.5 text-[9px] font-mono font-bold tracking-widest uppercase ${
+              currentView === 'SYNC'
+                ? 'bg-orange-600 border-orange-500 text-white'
+                : 'border-white/10 hover:border-white/45 hover:bg-white/5 text-zinc-400 hover:text-white'
+            }`}
+            title="Configure Cloud Backup Sync & view low-level telemetry"
+          >
+            <Cloud className="w-3 h-3 text-orange-500" />
+            <span className="hidden sm:inline">CLOUD SYNCED</span>
+          </button>
+
+          {/* Bell Icon Trigger */}
+          <button
+            onClick={() => setIsNotificationOpen(true)}
+            className="p-1 px-2 border border-white/10 hover:border-white/40 hover:bg-white/5 transition-all outline-none relative group h-6 flex items-center justify-center cursor-pointer"
+            title="Open Notification Center telemetry"
+          >
+            <Bell className="w-3.5 h-3.5 text-zinc-400 group-hover:text-white" />
+            {(state.notifications || []).filter(n => !n.read).length > 0 && (
+              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-orange-600 rounded-none animate-pulse" />
+            )}
+          </button>
+          
+          <div className="text-[9px] font-mono text-zinc-500 bg-white/[0.02] border border-white/5 py-1 px-2.5 uppercase tracking-wider h-6 flex items-center">
+            {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+          </div>
         </div>
       </header>
 
@@ -267,6 +333,7 @@ export default function App() {
               onSetPrimary={handleSetPrimary}
               onToggleTask={toggleTaskStatus}
               onAddSubtask={addSubtask}
+              onAddMultipleSubtasks={addMultipleSubtasks}
               onToggleSubtask={toggleSubtask}
               onAddDailyTodo={addDailyTodo}
               onToggleDailyTodo={(id) => toggleDailyTodo(today, id)}
@@ -282,6 +349,9 @@ export default function App() {
               onStopTimer={stopTimer}
               onAddManualTimeLog={addManualTimeLog}
               onUpdateTaskEstimate={updateTaskEstimate}
+              googleCalendarSettings={state.googleCalendarSettings}
+              googleCalendarEvents={state.googleCalendarEvents || []}
+              timeBlocks={state.timeBlocks || []}
             />
           )}
 
@@ -292,6 +362,8 @@ export default function App() {
               unfilteredTasks={state.tasks?.filter(t => t.category === 'NONE') || []}
               allTasks={state.tasks || []}
               goals={state.goals || []}
+              timeBlocks={state.timeBlocks || []}
+              blockTemplates={state.blockTemplates || []}
               onAdd={addTask}
               onCategorize={categorizeTask}
               onDelete={deleteTask}
@@ -299,10 +371,18 @@ export default function App() {
               onToggleTaskStatus={toggleTaskStatus}
               onAbandonTask={abandonTask}
               onAddSubtask={addSubtask}
+              onAddMultipleSubtasks={addMultipleSubtasks}
               onToggleSubtask={toggleSubtask}
               onSetDependency={setTaskDependency}
               onSetStartDate={setTaskStartDate}
               onLinkTaskToGoal={linkTaskToGoal}
+              onAddTimeBlock={addTimeBlock}
+              onUpdateTimeBlock={updateTimeBlock}
+              onDeleteTimeBlock={deleteTimeBlock}
+              onApplyBlockTemplate={applyBlockTemplate}
+              onSaveBlockAsTemplate={saveBlockAsTemplate}
+              googleCalendarEvents={state.googleCalendarEvents || []}
+              googleCalendarSettings={state.googleCalendarSettings}
             />
           )}
 
@@ -328,6 +408,8 @@ export default function App() {
               onUpdateGoalStatus={updateGoalStatus}
               onToggleKeyResult={toggleGoalKeyResult}
               onDeleteGoal={deleteGoal}
+              onAddMultipleSubtasks={addMultipleSubtasks}
+              onAddTask={addTask}
             />
           )}
 
@@ -355,7 +437,51 @@ export default function App() {
               toggleTimeTracking={toggleTimeTracking}
               dailyTimeBudget={state.dailyTimeBudget !== undefined ? state.dailyTimeBudget : 480}
               updateDailyTimeBudget={updateDailyTimeBudget}
+              notificationSettings={state.notificationSettings || {
+                morningBriefing: true,
+                morningBriefTime: '08:00',
+                taskReminders: true,
+                eodPrompt: true,
+                eodPromptTime: '17:00',
+                milestones: true,
+                insights: true,
+                weeklyDigest: true,
+                digestFrequency: 'weekly',
+                quietHoursEnabled: true,
+                quietHoursStart: '21:00',
+                quietHoursEnd: '08:00',
+              }}
+              updateNotificationSettings={updateNotificationSettings}
               onReset={resetAllState}
+            />
+          )}
+
+          {currentView === 'SYNC' && (
+            <SyncPage
+              key="sync"
+              tasks={state.tasks || []}
+              goals={state.goals || []}
+              streak={state.streak || 0}
+              timeBlocks={state.timeBlocks || []}
+              googleCalendarSettings={state.googleCalendarSettings}
+              googleCachedToken={state.googleCachedToken}
+              googleTokenExpiry={state.googleTokenExpiry}
+              googleCalendarEvents={state.googleCalendarEvents || []}
+              googleSyncLogs={state.googleSyncLogs || []}
+              updateGoogleCalendarSettings={updateGoogleCalendarSettings}
+              disconnectCalendar={disconnectCalendar}
+              addGoogleSyncLog={addGoogleSyncLog}
+              clearGoogleSyncLogs={clearGoogleSyncLogs}
+              saveGoogleCalendarEvents={saveGoogleCalendarEvents}
+            />
+          )}
+
+          {currentView === 'STREAKS' && (
+            <StreakDashboard
+              state={state}
+              updateStreakRule={updateStreakRule}
+              updateStreak={updateStreak}
+              tasks={state.tasks || []}
             />
           )}
 
@@ -556,6 +682,37 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+
+      <NotificationCenter
+        notifications={state.notifications || []}
+        tasks={state.tasks || []}
+        goals={state.goals || []}
+        streak={state.streak || 0}
+        notificationSettings={state.notificationSettings || {
+          morningBriefing: true,
+          morningBriefTime: '08:00',
+          taskReminders: true,
+          eodPrompt: true,
+          eodPromptTime: '17:00',
+          milestones: true,
+          insights: true,
+          weeklyDigest: true,
+          digestFrequency: 'weekly',
+          quietHoursEnabled: true,
+          quietHoursStart: '21:00',
+          quietHoursEnd: '08:00',
+        }}
+        isOpen={isNotificationOpen}
+        onClose={() => setIsNotificationOpen(false)}
+        onMarkRead={markNotificationAsRead}
+        onMarkAllRead={markAllNotificationsAsRead}
+        onClear={clearNotifications}
+        onAddNotification={addNotification}
+      />
+
+      {showCelebrationConfetti && (
+        <Confetti onComplete={() => setShowCelebrationConfetti(false)} />
+      )}
     </div>
   );
 }

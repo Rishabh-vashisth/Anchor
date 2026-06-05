@@ -18,9 +18,12 @@ import {
   Check, 
   ArrowRight,
   TrendingUp,
-  Sparkles
+  Sparkles,
+  ZapOff
 } from 'lucide-react';
-import { Task, DailyTodo, Reflection, TimeBlockType, TimeLog, ActiveTimer, Goal } from '../types';
+import { Task, DailyTodo, Reflection, TimeBlockType, TimeLog, ActiveTimer, Goal, GoogleCalendarSettings, GoogleCalendarEvent, TimeBlock } from '../types';
+import { detectTimeConflicts, getConcreteDatesForBlock } from '../utils/googleCalendarService';
+import { GeminiAdvisor } from '../components/GeminiAdvisor';
 
 interface DashboardPageProps {
   key?: string;
@@ -35,6 +38,7 @@ interface DashboardPageProps {
   onSetPrimary: (id: string) => void;
   onToggleTask: (id: string) => void;
   onAddSubtask: (taskId: string, title: string) => void;
+  onAddMultipleSubtasks?: (taskId: string, titles: string[]) => void;
   onToggleSubtask: (taskId: string, subtaskId: string) => void;
   onAddDailyTodo: (text: string) => void;
   onToggleDailyTodo: (id: string) => void;
@@ -52,6 +56,11 @@ interface DashboardPageProps {
   onStopTimer?: () => void;
   onAddManualTimeLog?: (taskId: string, durationMinutes: number) => void;
   onUpdateTaskEstimate?: (taskId: string, estimatedMinutes: number) => void;
+
+  // Google Calendar Integration
+  googleCalendarSettings?: GoogleCalendarSettings;
+  googleCalendarEvents?: GoogleCalendarEvent[];
+  timeBlocks?: TimeBlock[];
 }
 
 export function DashboardPage({
@@ -66,6 +75,7 @@ export function DashboardPage({
   onSetPrimary,
   onToggleTask,
   onAddSubtask,
+  onAddMultipleSubtasks,
   onToggleSubtask,
   onAddDailyTodo,
   onToggleDailyTodo,
@@ -81,7 +91,11 @@ export function DashboardPage({
   onStartTimer,
   onStopTimer,
   onAddManualTimeLog,
-  onUpdateTaskEstimate
+  onUpdateTaskEstimate,
+
+  googleCalendarSettings,
+  googleCalendarEvents = [],
+  timeBlocks = []
 }: DashboardPageProps) {
   // Input states
   const [subtaskInput, setSubtaskInput] = useState('');
@@ -171,6 +185,35 @@ export function DashboardPage({
     const completed = weeklyTasks.filter(t => t.status === 'completed').length;
     return Math.round((completed / weeklyTasks.length) * 100);
   }, [allTasks]);
+
+  const calendarConnected = googleCalendarSettings?.connected;
+
+  const activeConflicts = useMemo(() => {
+    if (!calendarConnected || !googleCalendarSettings?.syncConflictsWarn) return [];
+    return detectTimeConflicts(timeBlocks, googleCalendarEvents);
+  }, [calendarConnected, googleCalendarSettings, timeBlocks, googleCalendarEvents]);
+
+  const nextThreeMeetings = useMemo(() => {
+    const nowMs = Date.now();
+    return googleCalendarEvents
+      .filter(e => {
+        const s = e.start?.dateTime;
+        if (!s) return false;
+        return new Date(s).getTime() >= nowMs;
+      })
+      .slice(0, 3);
+  }, [googleCalendarEvents]);
+
+  const upcomingMeetingIn15Mins = useMemo(() => {
+    const nowMs = Date.now();
+    return googleCalendarEvents.find(e => {
+      const s = e.start?.dateTime;
+      if (!s) return false;
+      const startMs = new Date(s).getTime();
+      const diffMins = (startMs - nowMs) / 60000;
+      return diffMins > 0 && diffMins <= 15;
+    });
+  }, [googleCalendarEvents]);
 
   // Handle manual log form
   const handleAddManualLog = (e: React.FormEvent) => {
@@ -338,6 +381,134 @@ export function DashboardPage({
 
   return (
     <div className="space-y-10 focus-hub-container text-white">
+
+      {/* Google Calendar Alerts Overlay Layer */}
+      <AnimatePresence>
+        {upcomingMeetingIn15Mins && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="p-3.5 border-2 border-red-500/30 bg-red-950/20 text-white flex items-center justify-between gap-4 font-mono mb-4 rounded-none"
+          >
+            <div className="flex items-center gap-3">
+              <span className="w-2.5 h-2.5 bg-red-500 animate-ping shrink-0 rounded-none" />
+              <div>
+                <span className="text-[10px] uppercase font-black text-red-400 block tracking-widest leading-none mb-1">
+                  🔴 Imminent Meeting Warning
+                </span>
+                <p className="text-xs font-sans text-zinc-350">
+                  You have a scheduled calendar event &ldquo;<strong>{upcomingMeetingIn15Mins.summary}</strong>&rdquo; starting in less than 15 minutes! Please wrap up active deep work focus blocks.
+                </p>
+              </div>
+            </div>
+            {upcomingMeetingIn15Mins.htmlLink && (
+              <a
+                href={upcomingMeetingIn15Mins.htmlLink}
+                target="_blank"
+                rel="noreferrer"
+                className="shrink-0 text-[10px] px-3 py-1.5 bg-red-500 text-white font-black uppercase hover:bg-red-600 transition-colors tracking-wider"
+              >
+                Join / View Event
+              </a>
+            )}
+          </motion.div>
+        )}
+
+        {activeConflicts.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="p-3.5 border border-orange-500/25 bg-orange-950/10 text-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 font-mono mb-4 text-xs"
+          >
+            <div className="flex gap-2.5 items-start">
+              <AlertCircle className="w-5 h-5 text-orange-500 shrink-0 mt-0.5" />
+              <div>
+                <span className="text-[10px] uppercase font-black text-orange-400 block tracking-widest mb-1 leading-none">
+                  ⚠️ Google Calendar Overlap Conflict detected ({activeConflicts.length})
+                </span>
+                <p className="font-sans text-zinc-300 text-[11px] leading-relaxed">
+                  Your local focus blocks overlap with {activeConflicts.length} meeting{activeConflicts.length > 1 ? 's' : ''} in your GCal scheduler: &ldquo;{activeConflicts.slice(0, 2).map(c => `${c.blockLabel} overlays ${c.eventSummary}`).join(', ')}{activeConflicts.length > 2 ? '... and others' : ''}&rdquo;.
+                </p>
+              </div>
+            </div>
+            <span className="text-[9px] uppercase font-black shrink-0 px-2.5 py-1.5 border border-orange-500/30 text-orange-400 bg-orange-500/5 select-none font-mono">
+              Overlap Alert
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Google Calendar Scheduled Meetings Hub */}
+      {calendarConnected && (
+        <section className="space-y-3">
+          <div className="flex justify-between items-center">
+            <h3 className="text-[10px] font-mono text-zinc-500 uppercase tracking-[0.25em] block font-extrabold">
+              Upcoming Scheduled Meetings & Events
+            </h3>
+            <span className="text-[8px] font-mono px-2 py-0.5 bg-zinc-900 border border-white/5 uppercase text-orange-500 font-bold animate-pulse-subtle">
+              ● Live Sync Connected
+            </span>
+          </div>
+
+          <div className="border border-white/5 bg-zinc-950/40 p-4 space-y-3">
+            {nextThreeMeetings.length === 0 ? (
+              <div className="py-8 font-mono text-center border border-dashed border-zinc-900 text-zinc-500 text-xs uppercase tracking-wider">
+                No upcoming calendar meetings scheduled for today or tomorrow.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {nextThreeMeetings.map(meeting => {
+                  const itemStart = meeting.start?.dateTime ? new Date(meeting.start.dateTime) : null;
+                  const itemEnd = meeting.end?.dateTime ? new Date(meeting.end.dateTime) : null;
+                  const timeStr = itemStart 
+                    ? itemStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+                    : 'All Day';
+                  const dateStr = itemStart
+                    ? itemStart.toLocaleDateString([], { month: 'short', day: 'numeric' })
+                    : '';
+                  
+                  return (
+                    <div key={meeting.id} className="p-3 border border-white/5 bg-zinc-950/80 flex flex-col justify-between hover:border-orange-500/30 transition-all font-mono">
+                      <div>
+                        <div className="flex justify-between items-start gap-2 mb-1.5">
+                          <span className="text-[8px] px-1.5 py-0.5 bg-orange-500/10 text-orange-400 font-bold border border-orange-500/20 uppercase tracking-widest leading-none">
+                            {meeting.summary ? 'EXTERNAL' : 'PRIVATE'}
+                          </span>
+                          <span className="text-[9.5px] text-zinc-500 font-bold">
+                            {dateStr}
+                          </span>
+                        </div>
+                        <h4 className="text-xs font-sans font-black text-white line-clamp-1 uppercase">
+                          {meeting.summary || '(No Scheduled Topic)'}
+                        </h4>
+                        <div className="text-[10px] text-zinc-400 font-mono mt-1">
+                          {timeStr} {itemEnd ? ` - ${itemEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+                        </div>
+                      </div>
+
+                      <div className="border-t border-white/[0.04] mt-3 pt-2.5 flex justify-between items-center text-[8.5px]">
+                        <span className="text-zinc-500 truncate max-w-[120px]">Room: {meeting.location || 'Online'}</span>
+                        {meeting.htmlLink && (
+                          <a
+                            href={meeting.htmlLink}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-orange-400 hover:underline hover:text-orange-300 font-black uppercase shrink-0"
+                          >
+                            Launch Event ➔
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
       
       {/* 1. Header with greeting and responsive date */}
       <section className="space-y-1">
@@ -1080,6 +1251,24 @@ export function DashboardPage({
             </p>
           )}
         </div>
+      </section>
+
+      {/* Gemini AI Intelligence Advisor */}
+      <section className="space-y-3">
+        <h3 className="text-[10px] font-mono text-zinc-500 uppercase tracking-[0.25em] block">
+          Anchor AI Diagnostic Station
+        </h3>
+        <GeminiAdvisor 
+          tasks={tasks}
+          allTasks={allTasks}
+          reflections={reflections}
+          goals={goals}
+          googleCalendarEvents={googleCalendarEvents}
+          timeBlocks={timeBlocks}
+          onSetPrimary={onSetPrimary}
+          onAddSubtask={onAddSubtask}
+          onAddMultipleSubtasks={onAddMultipleSubtasks}
+        />
       </section>
 
       {/* 5. Insight of the Day (AI-generated behavioral insight) */}

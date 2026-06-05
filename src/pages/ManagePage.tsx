@@ -19,8 +19,9 @@ import {
   Zap,
   Target
 } from 'lucide-react';
-import { Task, Category, TimeBlockType, Goal } from '../types';
+import { Task, Category, TimeBlockType, Goal, TimeBlock, BlockTemplate, GoogleCalendarSettings, GoogleCalendarEvent } from '../types';
 import { TaskItem } from '../components/TaskItem';
+import { SmartBlockScheduler } from '../components/SmartBlockScheduler';
 
 interface ManagePageProps {
   key?: string;
@@ -28,6 +29,8 @@ interface ManagePageProps {
   unfilteredTasks: Task[]; // NONE category brain dump tasks
   allTasks: Task[]; // all items including completed/abandoned
   goals?: Goal[];
+  timeBlocks?: TimeBlock[];
+  blockTemplates?: BlockTemplate[];
   onAdd: (text: string) => void;
   onCategorize: (id: string, cat: Category) => void;
   onDelete: (id: string) => void;
@@ -35,10 +38,19 @@ interface ManagePageProps {
   onToggleTaskStatus: (id: string) => void;
   onAbandonTask: (id: string) => void;
   onAddSubtask: (taskId: string, title: string) => void;
+  onAddMultipleSubtasks?: (taskId: string, titles: string[]) => void;
   onToggleSubtask: (taskId: string, subtaskId: string) => void;
   onSetDependency: (taskId: string, dependsOnId: string | null) => void;
   onSetStartDate: (taskId: string, startDate: number | null) => void;
   onLinkTaskToGoal?: (taskId: string, goalId: string | null) => void;
+  onAddTimeBlock: (block: Omit<TimeBlock, 'id'>) => void;
+  onUpdateTimeBlock: (id: string, updates: Partial<TimeBlock>) => void;
+  onDeleteTimeBlock: (id: string) => void;
+  onApplyBlockTemplate: (templateId: string, dayOfWeek: number) => void;
+  onSaveBlockAsTemplate: (name: string, description: string, dayOfWeek: number) => void;
+
+  googleCalendarEvents?: GoogleCalendarEvent[];
+  googleCalendarSettings?: GoogleCalendarSettings;
 }
 
 export function ManagePage({
@@ -46,6 +58,8 @@ export function ManagePage({
   unfilteredTasks = [],
   allTasks = [],
   goals = [],
+  timeBlocks = [],
+  blockTemplates = [],
   onAdd,
   onCategorize,
   onDelete,
@@ -53,10 +67,18 @@ export function ManagePage({
   onToggleTaskStatus,
   onAbandonTask,
   onAddSubtask,
+  onAddMultipleSubtasks,
   onToggleSubtask,
   onSetDependency,
   onSetStartDate,
-  onLinkTaskToGoal
+  onLinkTaskToGoal,
+  onAddTimeBlock,
+  onUpdateTimeBlock,
+  onDeleteTimeBlock,
+  onApplyBlockTemplate,
+  onSaveBlockAsTemplate,
+  googleCalendarEvents = [],
+  googleCalendarSettings
 }: ManagePageProps) {
   const [activeSubTab, setActiveSubTab] = useState<'DUMP' | 'BLOCKS' | 'EDIT'>('DUMP');
   
@@ -274,101 +296,20 @@ export function ManagePage({
             exit={{ opacity: 0, x: 10 }}
             className="space-y-6"
           >
-            {/* Pomodoro Timer Segment */}
-            <div className="bg-zinc-950 border border-white/10 p-6 text-center space-y-4">
-              <div className="flex justify-between items-center text-[9px] font-mono text-zinc-500 uppercase tracking-widest">
-                <span>Concentration Accelerator Block</span>
-                {activeTimer && (
-                  <span className="text-red-500 animate-pulse font-bold flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 bg-red-500 rounded-full" /> Live
-                  </span>
-                )}
-              </div>
-
-              <div className="text-5xl font-black font-mono tracking-tight text-white">
-                {formatTime(timeLeft)}
-              </div>
-
-              <div className="flex justify-center items-center gap-4">
-                <button
-                  onClick={() => {
-                    setActiveTimer(false);
-                    setTimeLeft(25 * 60);
-                  }}
-                  className="p-2 border border-white/10 hover:border-white/30 text-zinc-500 hover:text-white"
-                  title="Reset timer state"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                </button>
-
-                <button
-                  onClick={() => setActiveTimer(!activeTimer)}
-                  className={`py-1.5 px-6 font-mono text-[10px] uppercase font-bold tracking-widest border ${
-                    activeTimer 
-                      ? 'border-red-500/30 text-red-400 bg-red-950/10' 
-                      : 'border-white bg-white text-black hover:opacity-90'
-                  }`}
-                >
-                  {activeTimer ? 'Pause Session' : 'Engage Focus'}
-                </button>
-              </div>
-            </div>
-
-            {/* Time Blocks Grid categorization */}
-            <div className="space-y-6">
-              {blocks.map(block => {
-                const blockTasks = tasks.filter(t => t.block === block.type && t.status === 'pending');
-                return (
-                  <div key={block.type} className={`border p-4 bg-zinc-950/20 space-y-3 ${block.color}`}>
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="text-xs font-black uppercase tracking-wider text-white">{block.label}</h4>
-                        <p className="text-[9px] font-mono text-zinc-500 uppercase">{block.desc}</p>
-                      </div>
-                      <span className="text-[10px] font-mono text-zinc-500 font-semibold uppercase">
-                        {blockTasks.length} queued
-                      </span>
-                    </div>
-
-                    {/* Task checklist */}
-                    <div className="space-y-2">
-                      {blockTasks.map(task => (
-                        <div key={task.id} className="p-2.5 border border-white/5 bg-zinc-950/40 flex justify-between items-center text-xs">
-                          <span className="font-medium text-zinc-300">{task.text}</span>
-                          <button
-                            onClick={() => onAssignBlock(task.id, 'FREE')} // Unassign block resets it or maps to unassigned
-                            className="text-[9px] font-mono text-zinc-600 hover:text-white uppercase transition-colors"
-                          >
-                            Unassign
-                          </button>
-                        </div>
-                      ))}
-
-                      {/* Dropdown assign element */}
-                      <div className="relative">
-                        <select
-                          className="w-full p-2.5 bg-[#050505] border border-white/5 text-[9px] font-bold uppercase tracking-widest appearance-none cursor-pointer text-zinc-400 focus:text-white outline-none"
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              onAssignBlock(e.target.value, block.type);
-                            }
-                            e.target.value = '';
-                          }}
-                          value=""
-                        >
-                          <option value="">+ Assign Task to {block.type} Block...</option>
-                          {currentKeepPendingTasks.filter(t => t.block !== block.type).map(t => (
-                            <option key={t.id} value={t.id}>{t.text}</option>
-                          ))}
-                        </select>
-                        <Plus className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-500 pointer-events-none" />
-                      </div>
-                    </div>
-
-                  </div>
-                );
-              })}
-            </div>
+            <SmartBlockScheduler
+              tasks={tasks}
+              allTasks={allTasks}
+              timeBlocks={timeBlocks}
+              blockTemplates={blockTemplates}
+              onAddTimeBlock={onAddTimeBlock}
+              onUpdateTimeBlock={onUpdateTimeBlock}
+              onDeleteTimeBlock={onDeleteTimeBlock}
+              onApplyBlockTemplate={onApplyBlockTemplate}
+              onSaveBlockAsTemplate={onSaveBlockAsTemplate}
+              onAssignToBlock={onAssignBlock}
+              googleCalendarEvents={googleCalendarEvents}
+              googleCalendarSettings={googleCalendarSettings}
+            />
           </motion.div>
         )}
 

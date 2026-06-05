@@ -9,8 +9,16 @@ import {
   User, 
   FolderLock,
   Sparkles,
-  Info
+  Info,
+  Bell,
+  Moon,
+  Clock,
+  Lightbulb,
+  Mail,
+  Flame,
+  Sun
 } from 'lucide-react';
+import { NotificationSettings } from '../types';
 
 interface SettingsPageProps {
   key?: string;
@@ -25,6 +33,8 @@ interface SettingsPageProps {
   toggleTimeTracking: () => void;
   dailyTimeBudget: number;
   updateDailyTimeBudget: (minutes: number) => void;
+  notificationSettings: NotificationSettings;
+  updateNotificationSettings: (settings: Partial<NotificationSettings>) => void;
   onReset: () => void;
 }
 
@@ -34,6 +44,8 @@ export function SettingsPage({
   toggleTimeTracking,
   dailyTimeBudget,
   updateDailyTimeBudget,
+  notificationSettings,
+  updateNotificationSettings,
   onReset
 }: SettingsPageProps) {
 
@@ -176,6 +188,240 @@ export function SettingsPage({
             </div>
           </motion.div>
         )}
+      </div>
+
+      {/* Notification Telemetry Control Center */}
+      <div className="p-4 border border-white/5 bg-zinc-950/40 space-y-4">
+        <div className="flex items-center gap-2 text-[10px] uppercase text-zinc-400 font-bold border-b border-white/5 pb-2">
+          <Bell className="w-3.5 h-3.5 text-orange-500" />
+          <span>Notification Telemetry triggers</span>
+        </div>
+
+        <p className="text-xs text-zinc-400 font-sans leading-relaxed">
+          Configure proactive non-obtrusive dynamic alerts. Settings align with cognitive pacing models to keep you aligned without nagging.
+        </p>
+
+        <div className="space-y-4 pt-2">
+          
+          {/* Item 1: Morning Briefing */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3 bg-white/[0.01] border border-white/5">
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-white">
+                <Sun className="w-3.5 h-3.5 text-orange-400" />
+                <span>Morning Circadian Briefing</span>
+              </div>
+              <p className="text-[10px] text-zinc-500 font-sans leading-relaxed">
+                Good morning alignment displaying high priority objective and daily cognitive budget allocations.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {notificationSettings.morningBriefing && (
+                <input
+                  type="time"
+                  value={notificationSettings.morningBriefTime}
+                  onChange={(e) => updateNotificationSettings({ morningBriefTime: e.target.value })}
+                  className="bg-black border border-white/15 px-2 py-1 text-[10px] text-white focus:border-white/40 font-mono outline-none"
+                />
+              )}
+              <button
+                onClick={() => updateNotificationSettings({ morningBriefing: !notificationSettings.morningBriefing })}
+                className={`px-2 py-1 text-[9px] font-mono uppercase font-bold border transition-all ${
+                  notificationSettings.morningBriefing
+                    ? 'bg-zinc-850 border-white/20 text-white'
+                    : 'border-white/10 text-zinc-600 hover:text-white'
+                }`}
+              >
+                {notificationSettings.morningBriefing ? 'Active' : 'Disabled'}
+              </button>
+            </div>
+          </div>
+
+          {/* Item 2: Task Reminders */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3 bg-white/[0.01] border border-white/5">
+            <div className="space-y-1 text-left">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-white">
+                <Clock className="w-3.5 h-3.5 text-blue-400" />
+                <span>Smart Task Reminders</span>
+              </div>
+              <p className="text-[10px] text-zinc-500 font-sans leading-relaxed">
+                Alerts on scheduled block start intervals, upcoming deadlines (2 hours remaining), and optimal energy wave suggestion times.
+              </p>
+            </div>
+            <button
+              onClick={() => updateNotificationSettings({ taskReminders: !notificationSettings.taskReminders })}
+              className={`px-2 py-1 text-[9px] font-mono uppercase font-bold border transition-all ${
+                notificationSettings.taskReminders
+                  ? 'bg-zinc-800 border-white/20 text-white'
+                  : 'border-white/10 text-zinc-600 hover:text-white'
+              }`}
+            >
+              {notificationSettings.taskReminders ? 'Active' : 'Disabled'}
+            </button>
+          </div>
+
+          {/* Item 3: EOD Reflection */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3 bg-white/[0.01] border border-white/5">
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-white">
+                <Moon className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Evening Reflection Prompt</span>
+              </div>
+              <p className="text-[10px] text-zinc-500 font-sans leading-relaxed">
+                Check-in trigger inviting quick capture micro-journal logging. Streaks safeguard tracker is displayed.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {notificationSettings.eodPrompt && (
+                <input
+                  type="time"
+                  value={notificationSettings.eodPromptTime}
+                  onChange={(e) => updateNotificationSettings({ eodPromptTime: e.target.value })}
+                  className="bg-black border border-white/15 px-2 py-1 text-[10px] text-white focus:border-white/40 font-mono outline-none"
+                />
+              )}
+              <button
+                onClick={() => updateNotificationSettings({ eodPrompt: !notificationSettings.eodPrompt })}
+                className={`px-2 py-1 text-[9px] font-mono uppercase font-bold border transition-all ${
+                  notificationSettings.eodPrompt
+                    ? 'bg-zinc-800 border-white/20 text-white'
+                    : 'border-white/10 text-zinc-600 hover:text-white'
+                }`}
+              >
+                {notificationSettings.eodPrompt ? 'Active' : 'Disabled'}
+              </button>
+            </div>
+          </div>
+
+          {/* Item 4: Milestone Celebrations */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3 bg-white/[0.01] border border-white/5">
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-white">
+                <Flame className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Milestone & Streak Celebrations</span>
+              </div>
+              <p className="text-[10px] text-zinc-500 font-sans leading-relaxed">
+                Recognize continuity strikes (streak multipliers), tactical goals completion, and weekly aggregate completing targets.
+              </p>
+            </div>
+            <button
+              onClick={() => updateNotificationSettings({ milestones: !notificationSettings.milestones })}
+              className={`px-2 py-1 text-[9px] font-mono uppercase font-bold border transition-all ${
+                notificationSettings.milestones
+                  ? 'bg-zinc-800 border-white/20 text-white'
+                  : 'border-white/10 text-zinc-600 hover:text-white'
+              }`}
+            >
+              {notificationSettings.milestones ? 'Active' : 'Disabled'}
+            </button>
+          </div>
+
+          {/* Item 5: Pragmatic Insights */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3 bg-white/[0.01] border border-white/5">
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-white">
+                <Lightbulb className="w-3.5 h-3.5 text-amber-400" />
+                <span>Data-driven Insight Alerts</span>
+              </div>
+              <p className="text-[10px] text-zinc-500 font-sans leading-relaxed">
+                Proactive alerts correlating completion ratios (e.g., morning completion profiles, tasks aging over 3 days, subtasks leverage boosters).
+              </p>
+            </div>
+            <button
+              onClick={() => updateNotificationSettings({ insights: !notificationSettings.insights })}
+              className={`px-2 py-1 text-[9px] font-mono uppercase font-bold border transition-all ${
+                notificationSettings.insights
+                  ? 'bg-zinc-800 border-white/20 text-white'
+                  : 'border-white/10 text-zinc-600 hover:text-white'
+              }`}
+            >
+              {notificationSettings.insights ? 'Active' : 'Disabled'}
+            </button>
+          </div>
+
+          {/* Item 6: Weekly Digest Summary */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3 bg-white/[0.01] border border-white/5">
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-white">
+                <Mail className="w-3.5 h-3.5 text-purple-400" />
+                <span>Weekly Sunday Strategic Review Digest</span>
+              </div>
+              <p className="text-[10px] text-zinc-500 font-sans leading-relaxed">
+                Digest compiling focus logs metrics, category share split ratios, blockers, insights, and next week predictive blueprints.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {notificationSettings.weeklyDigest && (
+                <select
+                  value={notificationSettings.digestFrequency}
+                  onChange={(e) => updateNotificationSettings({ digestFrequency: e.target.value as any })}
+                  className="bg-black border border-white/15 px-2 py-1 text-[9px] text-white focus:border-white/40 font-mono outline-none uppercase tracking-wide cursor-pointer"
+                >
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="off">Off</option>
+                </select>
+              )}
+              <button
+                onClick={() => updateNotificationSettings({ weeklyDigest: !notificationSettings.weeklyDigest })}
+                className={`px-2 py-1 text-[9px] font-mono uppercase font-bold border transition-all ${
+                  notificationSettings.weeklyDigest
+                    ? 'bg-zinc-800 border-white/20 text-white'
+                    : 'border-white/10 text-zinc-600 hover:text-white'
+                }`}
+              >
+                {notificationSettings.weeklyDigest ? 'Active' : 'Disabled'}
+              </button>
+            </div>
+          </div>
+
+          {/* Section: Quiet Hours sleeve */}
+          <div className="p-3 border border-zinc-800 bg-zinc-950/20 space-y-3.5">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-1.5 text-[10px] uppercase font-bold text-zinc-400">
+                <span className="w-1.5 h-1.5 bg-indigo-500 rounded-none inline-block animate-pulse" />
+                <span>Circadian Quiet Hours Rest offset</span>
+              </div>
+              <button
+                onClick={() => updateNotificationSettings({ quietHoursEnabled: !notificationSettings.quietHoursEnabled })}
+                className={`px-2 py-0.5 text-[8px] font-mono uppercase font-bold border transition-all ${
+                  notificationSettings.quietHoursEnabled
+                    ? 'bg-indigo-950 border-indigo-500 text-indigo-300'
+                    : 'border-white/10 text-zinc-600 hover:text-white'
+                }`}
+              >
+                {notificationSettings.quietHoursEnabled ? 'Silence ON' : 'Disabled'}
+              </button>
+            </div>
+
+            <p className="text-[10px] text-zinc-500 font-sans leading-relaxed">
+              Silences browser/telemetry banner updates during scheduled circadian rest breaks. In-app database entries will carry a quiet-mode label but will not trigger visual push cues when active.
+            </p>
+
+            {notificationSettings.quietHoursEnabled && (
+              <div className="flex items-center gap-4 text-xs pt-2 border-t border-white/5 font-mono">
+                <div className="flex items-center gap-2">
+                  <span className="text-zinc-500 uppercase text-[9px]">Silenced From:</span>
+                  <input
+                    type="time"
+                    value={notificationSettings.quietHoursStart}
+                    onChange={(e) => updateNotificationSettings({ quietHoursStart: e.target.value })}
+                    className="bg-black border border-white/15 px-2 py-1 text-[10px] text-white focus:border-white/40 font-mono outline-none"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-zinc-500 uppercase text-[9px]">Until:</span>
+                  <input
+                    type="time"
+                    value={notificationSettings.quietHoursEnd}
+                    onChange={(e) => updateNotificationSettings({ quietHoursEnd: e.target.value })}
+                    className="bg-black border border-white/15 px-2 py-1 text-[10px] text-white focus:border-white/40 font-mono outline-none"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+        </div>
       </div>
 
       {/* System info disclaimer */}

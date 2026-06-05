@@ -108,6 +108,51 @@ export interface Goal {
   lastUpdated: number;
 }
 
+export interface TimeBlock {
+  id: string;
+  dayOfWeek: number; // 0-6 (Sunday-Saturday)
+  startTime: string; // "HH:MM" e.g., "09:00"
+  duration: number; // in minutes
+  type: TimeBlockType;
+  environment: 'office' | 'home' | 'coffee shop' | 'outdoor' | 'any';
+  tools: ('computer' | 'notebook' | 'phone' | 'none')[];
+  focusLevel: number; // 1-10 focus rating
+  label?: string;
+  linkedTaskId?: string | null;
+}
+
+export interface BlockTemplate {
+  id: string;
+  name: string;
+  description: string;
+  blocks: Omit<TimeBlock, 'id'>[];
+}
+
+export interface NotificationSettings {
+  morningBriefing: boolean;
+  morningBriefTime: string; // "08:00"
+  taskReminders: boolean;
+  eodPrompt: boolean;
+  eodPromptTime: string; // "17:00"
+  milestones: boolean;
+  insights: boolean;
+  weeklyDigest: boolean;
+  digestFrequency: 'daily' | 'weekly' | 'off';
+  quietHoursEnabled: boolean;
+  quietHoursStart: string; // "21:00"
+  quietHoursEnd: string; // "08:00"
+}
+
+export interface AppNotification {
+  id: string;
+  type: 'morning_brief' | 'task_reminder' | 'eod_prompt' | 'milestone' | 'insight' | 'weekly_digest';
+  title: string;
+  body: string;
+  timestamp: number;
+  read: boolean;
+  data?: any;
+}
+
 export interface DailyState {
   primaryTaskId: string | null;
   tasks: Task[];
@@ -115,9 +160,18 @@ export interface DailyState {
   reflections: Reflection[];
   dailyTodos: { [date: string]: DailyTodo[] };
   goals?: Goal[]; // Optional or with custom default fallbacks
+  timeBlocks?: TimeBlock[];
+  blockTemplates?: BlockTemplate[];
+  notificationSettings?: NotificationSettings;
+  notifications?: AppNotification[];
   lastIdeaConvertedDate: string | null; // YYYY-MM-DD
   lastResetDate: string; // ISO date string
   streak: number;
+  personalBestStreak?: number;
+  streakRule?: 'traditional' | 'forgiving' | 'flexible';
+  forgivesUsedThisWeek?: number;
+  lastForgiveResetWeek?: number;
+  streakMilestonesUnlocked?: number[];
   lastCheckDate: string | null;
   isContinuingTask: boolean;
   pendingEodCheck: {
@@ -131,6 +185,38 @@ export interface DailyState {
   timeLogs?: TimeLog[];
   dailyTimeBudget?: number; // In minutes, e.g. 480
   activeTimer?: ActiveTimer | null;
+  googleCalendarSettings?: GoogleCalendarSettings;
+  googleCachedToken?: string | null;
+  googleTokenExpiry?: number | null;
+  googleCalendarEvents?: GoogleCalendarEvent[];
+  googleSyncLogs?: GoogleSyncLog[];
+}
+
+export interface GoogleCalendarSettings {
+  connected: boolean;
+  clientId: string;
+  calendarId: string;
+  calendarName: string;
+  syncEnabled: boolean;
+  syncConflictsWarn: boolean;
+  lastSynced: number | null;
+}
+
+export interface GoogleCalendarEvent {
+  id: string;
+  summary: string;
+  description?: string;
+  start: { dateTime?: string; date?: string };
+  end: { dateTime?: string; date?: string };
+  status?: string;
+  htmlLink?: string;
+}
+
+export interface GoogleSyncLog {
+  id: string;
+  timestamp: number;
+  type: 'info' | 'success' | 'warn' | 'error';
+  message: string;
 }
 
 export interface WeeklyStats {

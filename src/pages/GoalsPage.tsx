@@ -23,6 +23,7 @@ import {
   Briefcase
 } from 'lucide-react';
 import { Goal, GoalKeyResult, Task, GoalStatus, GoalType } from '../types';
+import { getGoalBreakdown } from '../utils/geminiSuggestService';
 
 interface GoalsPageProps {
   key?: string;
@@ -51,6 +52,8 @@ interface GoalsPageProps {
   onUpdateGoalStatus: (goalId: string, status: 'active' | 'completed' | 'abandoned') => void;
   onToggleKeyResult: (goalId: string, krId: string) => void;
   onDeleteGoal: (goalId: string) => void;
+  onAddMultipleSubtasks?: (taskId: string, titles: string[]) => void;
+  onAddTask?: (text: string) => void;
 }
 
 export function GoalsPage({
@@ -60,7 +63,9 @@ export function GoalsPage({
   onEditGoal,
   onUpdateGoalStatus,
   onToggleKeyResult,
-  onDeleteGoal
+  onDeleteGoal,
+  onAddMultipleSubtasks,
+  onAddTask
 }: GoalsPageProps) {
   const [activeTab, setActiveTab] = useState<'ACTIVE' | 'REVIEW' | 'ARCHIVE'>('ACTIVE');
   const [showAddForm, setShowAddForm] = useState(false);
@@ -77,6 +82,32 @@ export function GoalsPage({
   const [kr1, setKr1] = useState('');
   const [kr2, setKr2] = useState('');
   const [kr3, setKr3] = useState('');
+
+  // Gemini AI Goal Breakdown states
+  const [isBreakingDown, setIsBreakingDown] = useState(false);
+  const [aiBreakdown, setAiBreakdown] = useState<{
+    breakdownTitle: string;
+    keyResults: string[];
+    subtasks: string[];
+  } | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  const handleAiBreakdown = async () => {
+    if (!goalTitle.trim()) {
+      alert("Please enter a rough Objective Summary Headline first so Anchor AI has context to break it down!");
+      return;
+    }
+    setIsBreakingDown(true);
+    setAiError(null);
+    try {
+      const res = await getGoalBreakdown(goalTitle, goalDescription);
+      setAiBreakdown(res);
+    } catch (e: any) {
+      setAiError(e.message || "Failed to make call to Gemini suggestion server.");
+    } finally {
+      setIsBreakingDown(false);
+    }
+  };
 
   // Weekly review simulation wizard steps
   const [reviewStep, setReviewStep] = useState(1);
@@ -254,6 +285,93 @@ export function GoalsPage({
                   rows={2}
                   className="w-full bg-[#050505] p-3 border border-white/10 text-xs text-white focus:border-white outline-none font-mono"
                 />
+              </div>
+
+              {/* Gemini AI Goal Breakdown Suite */}
+              <div className="p-4 border border-orange-500/10 bg-orange-950/5 space-y-3">
+                <div className="flex justify-between items-center -mx-4 -mt-4 mb-2 p-3 bg-orange-950/20 font-mono text-[9px] text-orange-400 font-bold border-b border-orange-500/10">
+                  <span className="flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5 animate-pulse" /> Anchor AI Breakdown Co-Pilot</span>
+                  <span className="text-[8px] bg-orange-950 px-1 border border-orange-500/15">ACTIVE ENGINE</span>
+                </div>
+
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                  <p className="text-[10px] text-zinc-400 font-sans leading-relaxed max-w-md">
+                    Large or abstract goal? Click below to let Gemini analyze your objective summary, optimize key metrics, and suggest a task queue.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={isBreakingDown || !goalTitle.trim()}
+                    onClick={handleAiBreakdown}
+                    className="bg-orange-600 hover:bg-orange-700 disabled:opacity-40 text-white text-[9px] font-mono uppercase tracking-widest px-3 py-1.5 shrink-0 font-bold cursor-pointer transition-colors border border-white/5"
+                  >
+                    {isBreakingDown ? "Deconstructing..." : "Deconstruct Goal ✦"}
+                  </button>
+                </div>
+
+                {aiError && (
+                  <div className="p-2 border border-red-500/20 bg-red-950/25 text-red-400 text-[10px] font-mono">
+                    {aiError}
+                  </div>
+                )}
+
+                {aiBreakdown && (
+                  <div className="p-3 border border-white/5 bg-zinc-950 space-y-3.5 text-[11px] font-sans">
+                    <div className="space-y-1">
+                      <span className="text-[8px] font-mono text-zinc-500 uppercase tracking-wider block">Recommended Title Refinement:</span>
+                      <p className="text-white font-semibold font-sans italic text-xs">"{aiBreakdown.breakdownTitle}"</p>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <span className="text-[8px] font-mono text-zinc-500 uppercase tracking-widest block">Suggested Milestones (Key Results):</span>
+                      <div className="space-y-1 font-mono text-[9px] text-zinc-300 pl-2 border-l border-orange-500/20">
+                        {aiBreakdown.keyResults.map((kr, idx) => (
+                          <div key={idx} className="flex gap-1.5">
+                            <span className="text-orange-500">•</span>
+                            <span>{kr}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <span className="text-[8px] font-mono text-zinc-500 uppercase tracking-widest block">Suggested Action Backlog Layout:</span>
+                      <div className="space-y-1 font-mono text-[9px] text-zinc-400 pl-2 border-l border-zinc-700">
+                        {aiBreakdown.subtasks.map((st, idx) => (
+                          <div key={idx}>[{idx + 1}] {st}</div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 pt-2 border-t border-white/5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setGoalTitle(aiBreakdown.breakdownTitle);
+                          if (aiBreakdown.keyResults[0]) setKr1(aiBreakdown.keyResults[0]);
+                          if (aiBreakdown.keyResults[1]) setKr2(aiBreakdown.keyResults[1]);
+                          if (aiBreakdown.keyResults[2]) setKr3(aiBreakdown.keyResults[2]);
+                          alert("Refined title and quantifiable metrics filled into your Form!");
+                        }}
+                        className="bg-zinc-850 hover:bg-zinc-800 text-zinc-300 border border-white/10 hover:text-white text-[9px] font-mono uppercase px-2.5 py-1 font-bold cursor-pointer"
+                      >
+                        Accept Title & Metrics
+                      </button>
+
+                      {onAddTask && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            aiBreakdown.subtasks.forEach(tText => onAddTask(tText));
+                            alert(`Farmed ${aiBreakdown.subtasks.length} task nodes directly into your global backlog!`);
+                          }}
+                          className="bg-white text-black hover:opacity-85 text-[9px] font-mono uppercase px-2.5 py-1 font-bold cursor-pointer"
+                        >
+                          Accept & Populate Backlog Tasks ✓
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Advanced OKR metrics key milestones */}
