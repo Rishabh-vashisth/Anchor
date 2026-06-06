@@ -80,7 +80,7 @@ export function SmartBlockScheduler({
   googleCalendarSettings
 }: SmartBlockSchedulerProps) {
   const [selectedDay, setSelectedDay] = useState<number>(1); // 1 = Monday
-  const [viewMode, setViewMode] = useState<'CALENDAR' | 'DAILY'>('CALENDAR');
+  const [viewMode, setViewMode] = useState<'CALENDAR' | 'DAILY'>('DAILY');
 
   // Google Calendar scheduling helpers
   const calendarConnected = googleCalendarSettings?.connected;

@@ -5,21 +5,19 @@ import {
   Clock, 
   Play, 
   Pause, 
-  CheckSquare, 
   Plus, 
   ArrowRight,
-  Briefcase,
-  Layers,
-  Sparkles,
   Flame,
   CheckCircle2,
   Calendar,
-  ChevronRight,
   Zap,
-  Info
+  Check,
+  Edit2,
+  Sliders,
+  X
 } from 'lucide-react';
 import { Task, DailyTodo, Reflection, Goal, TimeLog, ActiveTimer } from '../types';
-import { GeminiAdvisor } from '../components/GeminiAdvisor';
+import { ActiveFocusSession } from '../components/ActiveFocusSession';
 
 interface TodayPageProps {
   key?: string;
@@ -31,64 +29,103 @@ interface TodayPageProps {
   isContinuingTask: boolean;
   reflections: Reflection[];
   goals?: Goal[];
+  timeLogs?: TimeLog[];
+  activeTimer?: ActiveTimer | null;
+  notificationSettings?: any;
+  onAddReflection?: (
+    text: string,
+    tag: any,
+    whatWorked?: string,
+    whatBlocked?: string,
+    whatSurprised?: string,
+    whatToDoDifferently?: string,
+    moodEnergy?: number,
+    stressLevel?: number,
+    photo?: string | null,
+    relatedTaskId?: string | null,
+    templateId?: string | null
+  ) => void;
   onSetPrimary: (id: string) => void;
   onToggleTask: (id: string) => void;
   onAddSubtask: (taskId: string, title: string) => void;
   onToggleSubtask: (taskId: string, subtaskId: string) => void;
-  onAddDailyTodo: (text: string) => void;
-  onToggleDailyTodo: (id: string) => void;
-  onDeleteDailyTodo: (id: string) => void;
-  onSetStartDate?: (taskId: string, startDate: number | null) => void;
-  onSetDependency?: (taskId: string, dependsOnId: string | null) => void;
-  onLinkTaskToGoal?: (taskId: string, goalId: string | null) => void;
+  onAddDailyTodo?: (text: string) => void;
+  onToggleDailyTodo?: (id: string) => void;
+  onDeleteDailyTodo?: (id: string) => void;
 
   timeTrackingEnabled?: boolean;
-  timeLogs?: TimeLog[];
   dailyTimeBudget?: number;
-  activeTimer?: ActiveTimer | null;
   onStartTimer?: (taskId: string, isPomodoro?: boolean, pomodoroDurationMinutes?: number) => void;
   onStopTimer?: () => void;
   onAddManualTimeLog?: (taskId: string, durationMinutes: number) => void;
   onUpdateTaskEstimate?: (taskId: string, estimatedMinutes: number) => void;
+  onUpdateTaskText?: (taskId: string, text: string) => void;
+  onDeleteTask?: (taskId: string) => void;
+  onAbandonTask?: (taskId: string) => void;
+  onLinkTaskToGoal?: (taskId: string, goalId: string | null) => void;
+  onSetTaskDependency?: (taskId: string, dependsOnId: string | null) => void;
+  onAssignBlock?: (taskId: string, block: any) => void;
   
   onQuickCapture?: (type: 'TASK' | 'IDEA' | 'REFLECTION', text: string) => void;
   onSwitchView?: (view: any) => void;
+  
+  // Custom parameters to bind beautifully
+  onAddTask?: (text: string, category: 'KEEP' | 'NONE', isPrimary: boolean) => void;
+  onExploreMore?: () => void;
 }
 
 export function TodayPage({
   primaryTask,
   tasks = [],
   allTasks = [],
-  dailyTodos = [],
   streak = 0,
-  isContinuingTask = false,
-  reflections = [],
+  timeLogs = [],
+  activeTimer = null,
   goals = [],
+  reflections = [],
+  notificationSettings,
+  onAddReflection,
   onSetPrimary,
   onToggleTask,
   onAddSubtask,
   onToggleSubtask,
-  onAddDailyTodo,
-  onToggleDailyTodo,
-  onDeleteDailyTodo,
-  
-  timeTrackingEnabled = true,
-  timeLogs = [],
-  dailyTimeBudget = 480,
-  activeTimer = null,
   onStartTimer,
   onStopTimer,
-  onAddManualTimeLog,
   onUpdateTaskEstimate,
-  onQuickCapture,
-  onSwitchView
+  onSwitchView,
+  onAddTask,
+  onExploreMore,
+  onUpdateTaskText,
+  onDeleteTask,
+  onAbandonTask,
+  onLinkTaskToGoal,
+  onSetTaskDependency,
+  onAssignBlock
 }: TodayPageProps) {
   const [subtaskInput, setSubtaskInput] = useState('');
-  const [todoInput, setTodoInput] = useState('');
+  const [newTaskInput, setNewTaskInput] = useState('');
   const [activeTimerSeconds, setActiveTimerSeconds] = useState(0);
-  const [localCaptureText, setLocalCaptureText] = useState('');
+  const [isFocusDismissed, setIsFocusDismissed] = useState(false);
+  const [showPrimaryGoalDetails, setShowPrimaryGoalDetails] = useState(false);
 
-  // Ticking active timer seconds
+  const primaryLinkedGoal = useMemo(() => {
+    if (!primaryTask || !primaryTask.goalId || !goals) return null;
+    return goals.find(g => g.id === primaryTask.goalId);
+  }, [primaryTask, goals]);
+
+  // Automatically open Focus Workspace Session when an active timer begins on the primary task
+  useEffect(() => {
+    if (activeTimer && primaryTask && activeTimer.taskId === primaryTask.id) {
+      setIsFocusDismissed(false);
+    }
+  }, [activeTimer?.taskId, primaryTask?.id]);
+
+  // User details persistence
+  const [name, setName] = useState(() => localStorage.getItem('anchor_user_name') || 'Rishabh');
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState(name);
+
+  // Run ticking timer for active workspace sessions
   useEffect(() => {
     if (!activeTimer) {
       setActiveTimerSeconds(0);
@@ -102,29 +139,47 @@ export function TodayPage({
     return () => clearInterval(intv);
   }, [activeTimer]);
 
-  // Find linked Goal/Project
-  const linkedProject = useMemo(() => {
-    if (!primaryTask?.goalId) return null;
-    return goals.find(g => g.id === primaryTask.goalId);
-  }, [primaryTask, goals]);
+  // Format date elegantly: Friday, June 5, 2026
+  const formattedDate = useMemo(() => {
+    return new Date().toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  }, []);
 
-  // Active projects list
-  const activeProjects = useMemo(() => {
-    return goals.filter(g => g.status === 'active');
-  }, [goals]);
+  // Determine standard greeting segment from temporal metrics
+  const greetingSegment = useMemo(() => {
+    const hours = new Date().getHours();
+    if (hours < 12) return 'Good morning';
+    if (hours < 17) return 'Good afternoon';
+    return 'Good evening';
+  }, []);
 
-  // Last Activity or completions
-  const lastCompletedTask = useMemo(() => {
-    const completed = allTasks.filter(t => t.status === 'completed' && t.completedAt);
-    if (completed.length === 0) return null;
-    return completed.sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0))[0];
-  }, [allTasks]);
+  // Compute Weekly Statistics
+  const weeklyStats = useMemo(() => {
+    const now = Date.now();
+    const startOfWeekMs = now - 7 * 24 * 3600 * 1000;
+    
+    const weekCompletions = allTasks.filter(
+      t => t.status === 'completed' && t.completedAt && t.completedAt >= startOfWeekMs
+    );
+    
+    const weekTaskCount = allTasks.filter(t => t.createdAt >= startOfWeekMs).length;
+    
+    const weekLogsSumSec = (timeLogs || [])
+      .filter(log => log.startTime >= startOfWeekMs)
+      .reduce((sum, log) => sum + log.duration, 0);
 
-  // Recommended next actions (Exclude primary task if set)
-  const recommendations = useMemo(() => {
-    const available = tasks.filter(t => t.status === 'pending' && t.id !== primaryTask?.id);
-    return available.slice(0, 3);
-  }, [tasks, primaryTask]);
+    const hoursLogged = parseFloat((weekLogsSumSec / 3600).toFixed(1));
+
+    return {
+      completions: weekCompletions.length,
+      totalCount: weekTaskCount,
+      hours: hoursLogged
+    };
+  }, [allTasks, timeLogs]);
 
   const handleAddSubtaskSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -134,409 +189,450 @@ export function TodayPage({
     }
   };
 
-  const handleAddTodoSubmit = (e: React.FormEvent) => {
+  const handleCreateAndAnchorSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (todoInput.trim()) {
-      onAddDailyTodo(todoInput.trim());
-      setTodoInput('');
+    if (newTaskInput.trim()) {
+      if (onAddTask) {
+        onAddTask(newTaskInput.trim(), 'KEEP', true);
+      }
+      setNewTaskInput('');
     }
   };
 
-  const handleQuickLocalCapture = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (localCaptureText.trim() && onQuickCapture) {
-      onQuickCapture('TASK', localCaptureText.trim());
-      setLocalCaptureText('');
-    }
-  };
-
-  const formatTimer = (totalSeconds: number) => {
-    const hrs = Math.floor(totalSeconds / 3600);
-    const mins = Math.floor((totalSeconds % 3600) / 60);
-    const secs = totalSeconds % 60;
+  const formatTimerVal = (totalSecs: number) => {
+    const hrs = Math.floor(totalSecs / 3600);
+    const mins = Math.floor((totalSecs % 3600) / 60);
+    const secs = totalSecs % 60;
     return `${hrs > 0 ? hrs + ':' : ''}${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Subtask calculations
+  // Filter possible recommendations to select as primary anchor focus
+  const alternativeRecommendations = useMemo(() => {
+    return allTasks
+      .filter(t => t.status === 'pending' && t.id !== primaryTask?.id)
+      .slice(0, 3);
+  }, [allTasks, primaryTask]);
+
   const subtasks = primaryTask?.subtasks || [];
-  const completedSubtasksCount = subtasks.filter(s => s.completed).length;
+  const completedSubtasks = subtasks.filter(s => s.completed).length;
   const progressPercent = subtasks.length > 0 
-    ? Math.round((completedSubtasksCount / subtasks.length) * 100) 
+    ? Math.round((completedSubtasks / subtasks.length) * 100) 
     : 0;
+
+  if (primaryTask && activeTimer && activeTimer.taskId === primaryTask.id && !isFocusDismissed) {
+    return (
+      <ActiveFocusSession
+        task={primaryTask}
+        allTasks={allTasks}
+        goals={goals}
+        timeLogs={timeLogs}
+        activeTimer={activeTimer}
+        activeTimerSeconds={activeTimerSeconds}
+        streak={streak}
+        weeklyStats={weeklyStats}
+        onStopTimer={onStopTimer || (() => {})}
+        onStartTimer={onStartTimer || (() => {})}
+        onToggleTask={onToggleTask}
+        onToggleSubtask={onToggleSubtask}
+        onAddSubtask={onAddSubtask}
+        onUpdateTaskEstimate={onUpdateTaskEstimate}
+        onUpdateTaskText={onUpdateTaskText}
+        onDeleteTask={onDeleteTask}
+        onAbandonTask={onAbandonTask}
+        onLinkTaskToGoal={onLinkTaskToGoal}
+        onSetTaskDependency={onSetTaskDependency}
+        onAssignBlock={onAssignBlock}
+        onDismiss={() => setIsFocusDismissed(true)}
+      />
+    );
+  }
 
   return (
     <motion.div 
-      initial={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
+      exit={{ opacity: 0, y: -15 }}
       transition={{ duration: 0.4 }}
-      className="max-w-4xl mx-auto space-y-12 py-4"
+      className="max-w-[520px] mx-auto space-y-8 py-6 md:py-12 px-4 select-none"
     >
-      {/* Editorial Greetings Banner & Focus state */}
-      <div className="space-y-2">
-        <div className="flex justify-between items-center">
-          <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-500 font-medium">
-            Workspace Day Shell
-          </span>
-          {streak > 0 && (
-            <span className="flex items-center gap-1 text-[10px] font-mono text-orange-400 font-bold bg-orange-950/20 px-2.5 py-0.5 border border-orange-500/10">
-              <Flame className="w-3.5 h-3.5 fill-orange-500/10" /> {streak} DAY STREAK
-            </span>
+      {/* 1. Greeting Section (Date + Name) */}
+      <div className="space-y-2 text-center md:text-left">
+        <p className="text-[10px] font-mono tracking-[0.25em] text-zinc-500 uppercase font-bold">
+          {formattedDate}
+        </p>
+        <div className="flex flex-col md:flex-row md:items-baseline md:gap-2.5 justify-center md:justify-start">
+          {isEditingName ? (
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (nameInput.trim()) {
+                  setName(nameInput.trim());
+                  localStorage.setItem('anchor_user_name', nameInput.trim());
+                  setIsEditingName(false);
+                }
+              }}
+              className="flex items-center gap-2 justify-center md:justify-start pt-1"
+            >
+              <input
+                type="text"
+                value={nameInput}
+                onChange={(e) => setNameInput(e.target.value)}
+                maxLength={20}
+                className="bg-zinc-900/50 border border-zinc-800 text-xl font-black text-white px-2.5 py-0.5 outline-none focus:border-zinc-500 rounded-none w-44 font-sans text-center md:text-left"
+                autoFocus
+                onBlur={() => {
+                  if (nameInput.trim()) {
+                    setName(nameInput.trim());
+                    localStorage.setItem('anchor_user_name', nameInput.trim());
+                  }
+                  setIsEditingName(false);
+                }}
+              />
+              <button 
+                type="submit" 
+                className="px-2 py-1 bg-white text-black font-mono text-[9px] uppercase font-bold"
+              >
+                Save
+              </button>
+            </form>
+          ) : (
+            <div className="group flex items-center gap-1.5 justify-center md:justify-start">
+              <h1 className="text-3xl font-black tracking-tight text-white leading-none">
+                {greetingSegment}, <span className="text-zinc-300 font-extrabold">{name}</span>.
+              </h1>
+              <button 
+                onClick={() => {
+                  setNameInput(name);
+                  setIsEditingName(true);
+                }}
+                className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-zinc-500 hover:text-white transition-opacity p-1 cursor-pointer"
+                title="Edit visual profile name"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
           )}
         </div>
-        <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white font-sans max-w-2xl leading-[1.15]">
-          A calm workspace that <span className="text-zinc-400">remembers what matters</span>.
-        </h2>
       </div>
 
-      {/* Grid: Resume Work Panel vs Next Focus Triage */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
-        {/* Left Column: Primary Focus & Context Retrieval (8 cols) */}
-        <div className="lg:col-span-8 space-y-8">
-          
-          {primaryTask ? (
-            <div className="border border-white/5 bg-[#0a0a0c]/80 p-6 md:p-8 flex flex-col justify-between relative group hover:border-white/10 transition-all duration-300">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-orange-500/5 rounded-full blur-2xl group-hover:bg-orange-500/10 transition-all pointer-events-none" />
-              
-              <div className="space-y-4">
-                <div className="flex justify-between items-center text-[9px] font-mono uppercase text-zinc-500">
-                  <span className="flex items-center gap-1.5 font-bold tracking-wider text-orange-400">
-                    <Compass className="w-3.5 h-3.5 animate-spin" style={{ animationDuration: '6s' }} />
-                    Active Anchor Focus Task
-                  </span>
-                  {linkedProject && (
-                    <span className="bg-zinc-900 border border-white/10 px-2 py-0.5 text-[8px] text-zinc-400">
-                      Project: {linkedProject.title}
-                    </span>
-                  )}
-                </div>
+      {/* 2. Primary Task Card (Focused, Clean) */}
+      {activeTimer && primaryTask && activeTimer.taskId === primaryTask.id && isFocusDismissed && (
+        <motion.button
+          initial={{ opacity: 0, y: -5 }}
+          animate={{ opacity: 1, y: 0 }}
+          onClick={() => setIsFocusDismissed(false)}
+          className="w-full bg-[#e45423]/10 hover:bg-[#e45423]/20 border border-[#e45423]/30 p-3 text-center text-[10px] text-white font-mono font-bold uppercase tracking-widest flex items-center justify-center gap-2.5 animate-pulse cursor-pointer transition-colors"
+          title="Return back to Active Focus Workspace"
+        >
+          <span className="w-2 h-2 rounded-full bg-[#e45423] inline-block animate-ping" />
+          <span>Session Active in Background • Click to Resume Workspace</span>
+        </motion.button>
+      )}
 
-                <div className="space-y-2">
-                  <h3 className="text-2xl font-bold text-white tracking-tight leading-snug">
-                    {primaryTask.text}
-                  </h3>
-                  <p className="text-xs text-zinc-400 leading-relaxed font-sans">
-                    Initiated context {new Date(primaryTask.createdAt).toLocaleDateString()}. Work focus has been anchored deep.
-                  </p>
-                </div>
-
-                {/* Subtask checklist progress */}
-                {subtasks.length > 0 && (
-                  <div className="space-y-3 pt-3">
-                    <div className="flex justify-between text-[10px] font-mono text-zinc-400">
-                      <span>Subtask Checkpoints</span>
-                      <span>{completedSubtasksCount}/{subtasks.length} Resolved ({progressPercent}%)</span>
-                    </div>
-                    
-                    <div className="h-1 bg-zinc-900 border border-white/5 overflow-hidden">
-                      <div 
-                        className="h-full bg-white transition-all duration-500"
-                        style={{ width: `${progressPercent}%` }}
-                      />
-                    </div>
-
-                    <div className="space-y-1 pt-1.5">
-                      {subtasks.map(s => (
-                        <button
-                          key={s.id}
-                          onClick={() => onToggleSubtask(primaryTask.id, s.id)}
-                          className="w-full flex items-center gap-3 text-left p-2 hover:bg-white/[0.02] border border-transparent hover:border-white/5 transition-all text-xs font-mono"
-                        >
-                          <span className={`w-4 h-4 border flex items-center justify-center shrink-0 ${
-                            s.completed ? 'bg-white text-black border-white' : 'border-zinc-700 text-transparent'
-                          }`}>
-                            ✓
-                          </span>
-                          <span className={`flex-1 ${s.completed ? 'line-through text-zinc-600' : 'text-zinc-300'}`}>
-                            {s.title}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Quick Add Subtask In-Context */}
-                <form onSubmit={handleAddSubtaskSubmit} className="flex gap-2 pt-2">
-                  <input
-                    type="text"
-                    value={subtaskInput}
-                    onChange={(e) => setSubtaskInput(e.target.value)}
-                    placeholder="Add focus checklist checkpoint..."
-                    className="flex-1 bg-transparent border-b border-white/15 py-1.5 text-xs text-zinc-300 font-mono focus:outline-none focus:border-white transition-all placeholder:text-zinc-700"
-                  />
-                  <button 
-                    type="submit"
-                    className="p-1 px-3 bg-zinc-900 border border-white/5 hover:border-white/10 hover:bg-zinc-800 text-xs text-white font-mono uppercase"
-                  >
-                    + Add
-                  </button>
-                </form>
-              </div>
-
-              {/* Work Continuity Session controls */}
-              <div className="flex flex-wrap items-center justify-between border-t border-white/5 pt-5 mt-6 gap-4">
-                <div className="flex items-center gap-4">
-                  {activeTimer && activeTimer.taskId === primaryTask.id ? (
-                    <button
-                      onClick={onStopTimer}
-                      className="bg-white hover:bg-zinc-200 text-black font-mono text-[10px] font-black uppercase tracking-widest px-4 py-2 flex items-center gap-2 cursor-pointer transition-all"
-                    >
-                      <Pause className="w-3 h-3 fill-black" /> Scroll Pause
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => onStartTimer && onStartTimer(primaryTask.id, false)}
-                      className="bg-orange-600 hover:bg-orange-700 text-white font-mono text-[10px] font-black uppercase tracking-widest px-4 py-2 flex items-center gap-2 cursor-pointer transition-all border border-orange-500/10"
-                    >
-                      <Play className="w-3 h-3 fill-white" /> Focus Session
-                    </button>
-                  )}
-                  
-                  <button
-                    onClick={() => onToggleTask(primaryTask.id)}
-                    className="border border-white/10 hover:border-white/20 hover:bg-white/5 text-zinc-300 font-mono text-[10px] font-bold uppercase tracking-widest px-4 py-2 cursor-pointer transition-all"
-                  >
-                    Complete Node
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2.5 font-mono">
-                  <Clock className="w-3.5 h-3.5 text-zinc-500" />
-                  {activeTimer && activeTimer.taskId === primaryTask.id ? (
-                    <span className="text-sm font-black text-white">{formatTimer(activeTimerSeconds)}</span>
-                  ) : (
-                    <span className="text-xs text-zinc-500 font-bold">Session Rest</span>
-                  )}
-                </div>
-              </div>
+      <div className="border border-white/5 bg-zinc-950/40 p-5 md:p-6 space-y-5 shadow-2xl relative overflow-hidden">
+        {primaryTask ? (
+          <div className="space-y-4">
+            {/* Header label */}
+            <div className="flex justify-between items-center text-[8px] font-mono tracking-widest text-[#e25424] font-bold uppercase">
+              <span className="flex items-center gap-1.5">
+                <Compass className="w-3 h-3 animate-spin" style={{ animationDuration: '8s' }} />
+                Active Focus Anchor
+              </span>
+              <button
+                onClick={() => onSetPrimary('')}
+                className="text-zinc-500 hover:text-white transition-colors uppercase font-mono text-[8px] tracking-wider cursor-pointer"
+                title="Change active task anchor"
+              >
+                Change Anchor
+              </button>
             </div>
-          ) : (
-            <div className="border border-dashed border-white/10 p-8 flex flex-col justify-center items-center text-center space-y-4 py-12">
-              <span className="text-xl">⚓</span>
-              <div className="space-y-1">
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">No Active Anchor Set</h3>
-                <p className="text-xs text-zinc-500 max-w-sm leading-relaxed">
-                  Anchor requires exactly one cognitive load to act as your primary direction. Select a next step from recommendations below or create one.
-                </p>
-              </div>
-              
-              {recommendations.length > 0 ? (
-                <div className="w-full max-w-sm space-y-2 pt-2">
-                  <span className="text-[9px] font-mono text-zinc-600 uppercase font-black block tracking-widest text-left">Set active anchor from index:</span>
-                  {recommendations.map(t => (
-                    <button
-                      key={t.id}
-                      onClick={() => onSetPrimary(t.id)}
-                      className="w-full text-left p-2.5 border border-white/5 hover:border-white/10 bg-zinc-950/40 text-xs font-mono text-zinc-400 hover:text-white flex justify-between items-center transition-all"
+
+            {/* Core Task Description */}
+            <div className="space-y-1.5">
+              <h2 className="text-lg font-bold text-white leading-snug tracking-tight font-sans">
+                {primaryTask.text}
+              </h2>
+              <p className="text-[10px] text-zinc-500 font-mono">
+                Initiated {new Date(primaryTask.createdAt).toLocaleDateString()}
+              </p>
+            </div>
+
+            {primaryLinkedGoal && (
+              <div className="mt-2 pt-2 border-t border-white/5 space-y-1.5 align-baseline">
+                <div className="inline-flex items-center gap-1.5 text-xs">
+                  <span className="text-zinc-500 font-mono text-[9px] uppercase tracking-wide">This serves:</span>
+                  <button 
+                    type="button"
+                    onClick={() => setShowPrimaryGoalDetails(!showPrimaryGoalDetails)}
+                    className="text-orange-400 hover:text-orange-300 underline underline-offset-2 transition-colors font-mono font-bold text-left flex items-center gap-1.5 text-[10.5px]"
+                    title="Click to view core goal alignment details"
+                  >
+                    <span>🎯 {primaryLinkedGoal.title}</span>
+                  </button>
+                </div>
+
+                <AnimatePresence>
+                  {showPrimaryGoalDetails && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="bg-white border border-zinc-200 p-4 shadow-2xl relative overflow-hidden text-zinc-900 rounded-none w-full font-sans"
                     >
-                      <span className="truncate flex-1 pr-4">{t.text}</span>
-                      <ArrowRight className="w-3 h-3 text-zinc-500 shrink-0" />
+                      <div className="flex justify-between items-start border-b border-zinc-100 pb-2 mb-2">
+                        <div>
+                          <span className="text-[8px] font-mono font-black uppercase tracking-widest text-[#e25424]">Goal Alignment Status</span>
+                          <h4 className="text-sm font-extrabold text-zinc-900 mt-0.5 leading-tight">{primaryLinkedGoal.title}</h4>
+                        </div>
+                        <span className="text-[8.5px] font-mono font-bold bg-zinc-100 border border-zinc-200 px-2 py-0.5 uppercase tracking-wider text-zinc-655 shrink-0 ml-2">
+                          {primaryLinkedGoal.type}
+                        </span>
+                      </div>
+                      
+                      {(() => {
+                        const krs = primaryLinkedGoal.keyResults || [];
+                        const completedKrs = krs.filter(kr => kr.completed).length;
+                        const progress = krs.length > 0 ? Math.round((completedKrs / krs.length) * 100) : 0;
+                        return (
+                          <div className="space-y-3">
+                            <div className="flex justify-between text-[10.5px] text-zinc-650 font-mono">
+                              <span>Objective Progress:</span>
+                              <span className="font-bold text-zinc-950">{progress}%</span>
+                            </div>
+                            <div className="h-1.5 w-full bg-zinc-100 overflow-hidden border border-zinc-200/40">
+                              <div className="h-full bg-zinc-900 transition-all duration-300" style={{ width: `${progress}%` }} />
+                            </div>
+
+                            <div className="flex justify-between text-[9px] text-zinc-450 font-mono pt-1">
+                              <span>Target Complete Calendar Date:</span>
+                              <span className="text-zinc-750 font-bold">{primaryLinkedGoal.targetDate}</span>
+                            </div>
+
+                            {krs.length > 0 && (
+                              <div className="space-y-1.5 pt-2 border-t border-zinc-100">
+                                <span className="text-[8.5px] uppercase font-bold text-zinc-400 block font-mono">Key Actions:</span>
+                                <div className="space-y-1.5">
+                                  {krs.map(kr => (
+                                    <div key={kr.id} className="flex items-start gap-1.5 text-xs text-zinc-700">
+                                      <span className={`w-3.5 h-3.5 border flex items-center justify-center shrink-0 mt-0.5 ${kr.completed ? 'bg-zinc-950 border-zinc-800 text-white' : 'border-zinc-300 text-transparent'}`}>
+                                        ✓
+                                      </span>
+                                      <span className={kr.completed ? 'line-through text-zinc-400 font-sans font-medium' : 'font-sans font-medium'}>{kr.text}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+
+            {/* Progress gauge for checklist */}
+            {subtasks.length > 0 && (
+              <div className="space-y-2 pt-1">
+                <div className="flex justify-between items-center text-[9px] font-mono text-zinc-400">
+                  <span>Checkpoint Progress</span>
+                  <span>{completedSubtasks}/{subtasks.length} Resolved ({progressPercent}%)</span>
+                </div>
+                <div className="h-1 bg-zinc-900 border border-white/5 overflow-hidden">
+                  <div 
+                    className="h-full bg-white transition-all duration-300"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+
+                {/* Subtask items checklist */}
+                <div className="space-y-1 pt-1">
+                  {subtasks.map(sub => (
+                    <button
+                      key={sub.id}
+                      onClick={() => onToggleSubtask(primaryTask.id, sub.id)}
+                      className="w-full flex items-center gap-2.5 text-left p-1.5 hover:bg-white/[0.02] border border-transparent hover:border-white/5 transition-all text-xs font-mono"
+                    >
+                      <span className={`w-3.5 h-3.5 border flex items-center justify-center shrink-0 ${
+                        sub.completed ? 'bg-white text-black border-white' : 'border-zinc-800 text-transparent'
+                      }`}>
+                        <Check className="w-2.5 h-2.5" />
+                      </span>
+                      <span className={`flex-1 truncate ${sub.completed ? 'line-through text-zinc-600' : 'text-zinc-300'}`}>
+                        {sub.title}
+                      </span>
                     </button>
                   ))}
                 </div>
-              ) : (
-                <button
-                  onClick={() => onSwitchView && onSwitchView('CAPTURE')}
-                  className="bg-white text-black font-mono text-[9px] font-black uppercase tracking-widest py-2 px-4 transition-all"
-                >
-                  Quickly Capture Node
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Continuity memory section (Recent completed note) */}
-          <div className="space-y-4">
-            <span className="text-[10px] font-mono uppercase tracking-[0.25em] text-zinc-500 font-bold block">
-              Last Registered Memory Completes
-            </span>
-            {lastCompletedTask ? (
-              <div className="p-4 bg-zinc-900/30 border border-white/5 flex gap-4 items-center">
-                <div className="w-8 h-8 rounded-full bg-emerald-950/40 border border-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs shrink-0 select-none">
-                  ✓
-                </div>
-                <div className="space-y-0.5 flex-1 min-w-0">
-                  <span className="text-[9px] font-mono text-zinc-500 block uppercase">COMPLETED SECONDS AGO</span>
-                  <p className="text-xs text-zinc-300 font-mono truncate">{lastCompletedTask.text}</p>
-                </div>
-                <span className="text-[10px] font-mono text-zinc-600 shrink-0">
-                  {new Date(lastCompletedTask.completedAt || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                </span>
-              </div>
-            ) : (
-              <div className="p-4 bg-zinc-900/10 border border-white/5 text-center text-xs text-zinc-600 font-mono uppercase">
-                Initialize actions to stamp activity footprints.
               </div>
             )}
-          </div>
 
-        </div>
-
-        {/* Right Column: Mini Checklist Todos + Quick Capture (4 cols) */}
-        <div className="lg:col-span-4 space-y-8">
-          
-          {/* Quick Capture Panel on Screen */}
-          <div className="p-5 border border-white/5 bg-zinc-950/40 space-y-4">
-            <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-400 block font-bold">
-              Instant Thought Buffer
-            </span>
-            <form onSubmit={handleQuickLocalCapture} className="space-y-3">
+            {/* Add Subtask In-Context Form */}
+            <form onSubmit={handleAddSubtaskSubmit} className="flex gap-2 pt-1 border-t border-white/5">
               <input
                 type="text"
-                value={localCaptureText}
-                onChange={(e) => setLocalCaptureText(e.target.value)}
-                placeholder="What popped into your head?"
-                className="w-full bg-transparent border-b border-white/10 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-white transition-all placeholder:text-zinc-700"
-              />
-              <button
-                type="submit"
-                disabled={!localCaptureText.trim()}
-                className="w-full py-2 bg-white disabled:bg-zinc-800 disabled:text-zinc-600 text-black text-center font-mono text-[9px] font-black uppercase tracking-widest cursor-pointer transition-all"
-              >
-                Stream to Buffer
-              </button>
-            </form>
-          </div>
-
-          {/* Sticky Daily Checkpoints / Simple Scratchpad checklist */}
-          <div className="p-5 border border-white/5 bg-zinc-950/40 space-y-4">
-            <div className="flex justify-between items-center text-[10px] font-mono text-zinc-400 border-b border-white/5 pb-2">
-              <span className="uppercase font-bold tracking-[0.15em]">Daily Scratch List</span>
-              <span className="text-[9px] text-zinc-500">{dailyTodos.filter(t => t.completed).length}/{dailyTodos.length} Completed</span>
-            </div>
-
-            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-              {dailyTodos.length > 0 ? (
-                dailyTodos.map(todo => (
-                  <div key={todo.id} className="flex items-center gap-2 group justify-between">
-                    <button
-                      onClick={() => onToggleDailyTodo(todo.id)}
-                      className="flex items-center gap-2.5 text-left flex-1 min-w-0"
-                    >
-                      <span className={`w-3.5 h-3.5 border flex items-center justify-center shrink-0 ${
-                        todo.completed ? 'bg-zinc-800 border-zinc-700 text-zinc-400' : 'border-zinc-700 text-transparent'
-                      }`}>
-                        ✕
-                      </span>
-                      <span className={`text-[11px] font-sans truncate ${todo.completed ? 'line-through text-zinc-600' : 'text-zinc-300'}`}>
-                        {todo.text}
-                      </span>
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <p className="text-[10px] text-zinc-600 font-mono italic">No items on scratchpad today.</p>
-              )}
-            </div>
-
-            <form onSubmit={handleAddTodoSubmit} className="flex gap-2">
-              <input
-                type="text"
-                value={todoInput}
-                onChange={(e) => setTodoInput(e.target.value)}
-                placeholder="Scratch a point down..."
-                className="flex-1 bg-transparent border-b border-white/10 py-1 text-xs text-zinc-200 font-mono focus:outline-none focus:border-white transition-all placeholder:text-zinc-700"
+                value={subtaskInput}
+                onChange={(e) => setSubtaskInput(e.target.value)}
+                placeholder="Declare micro checkpoint..."
+                maxLength={45}
+                className="flex-1 bg-transparent border-b border-white/10 py-1 text-xs text-zinc-300 font-mono focus:outline-none focus:border-white transition-all placeholder:text-zinc-700"
               />
               <button 
                 type="submit"
-                className="p-1 px-2 text-white hover:text-white/60 transition-colors uppercase font-mono text-xs"
+                disabled={!subtaskInput.trim()}
+                className="px-2.5 text-zinc-400 hover:text-white disabled:text-zinc-800 transition-colors uppercase font-mono text-[9px]"
               >
-                +
+                + ADD
               </button>
             </form>
-          </div>
 
-          {/* Active Projects Overview Node count */}
-          <div className="p-5 border border-white/5 bg-zinc-950/40 space-y-3.5">
-            <span className="text-[10px] font-mono uppercase tracking-[0.15em] text-zinc-400 font-bold block">
-              Active Project Portals
-            </span>
-            
-            <div className="space-y-2">
-              {activeProjects.map(p => {
-                const linkedTasks = allTasks.filter(t => t.goalId === p.id);
-                const completedTasks = linkedTasks.filter(t => t.status === 'completed');
-                const projectProgress = linkedTasks.length > 0 
-                  ? Math.round((completedTasks.length / linkedTasks.length) * 100) 
-                  : 0;
-
-                return (
+            {/* Control Strip (Timer, Stop, Complete) */}
+            <div className="flex items-center justify-between pt-3 border-t border-white/5">
+              <div className="flex items-center gap-2">
+                {activeTimer && activeTimer.taskId === primaryTask.id ? (
                   <button
-                    key={p.id}
-                    onClick={() => onSwitchView && onSwitchView('PROJECTS')}
-                    className="w-full text-left p-3 border border-white/5 hover:border-white/10 hover:bg-white/[0.01] transition-all duration-300 block space-y-2 cursor-pointer"
+                    onClick={onStopTimer}
+                    className="bg-white hover:bg-zinc-200 text-black font-mono text-[9px] font-black uppercase tracking-widest px-3.5 py-1.5 flex items-center gap-1.5 cursor-pointer transition-all"
                   >
-                    <div className="flex justify-between items-baseline">
-                      <span className="text-xs font-bold text-white truncate max-w-[140px]">{p.title}</span>
-                      <span className="text-[8px] font-mono text-zinc-500">{projectProgress}% Focus</span>
-                    </div>
-                    {/* Micro gauge */}
-                    <div className="h-1 bg-zinc-900 rounded-none overflow-hidden">
-                      <div 
-                        className="h-full bg-zinc-400"
-                        style={{ width: `${projectProgress}%` }}
-                      />
-                    </div>
+                    <Pause className="w-2.5 h-2.5 fill-black" /> Pause
                   </button>
-                );
-              })}
+                ) : (
+                  <button
+                    onClick={() => onStartTimer && onStartTimer(primaryTask.id, false)}
+                    className="bg-[#e45423] hover:bg-[#c74519] text-white font-mono text-[9px] font-black uppercase tracking-widest px-3.5 py-1.5 flex items-center gap-1.5 cursor-pointer transition-all border border-orange-500/10"
+                  >
+                    <Play className="w-2.5 h-2.5 fill-white" /> Start Focus
+                  </button>
+                )}
+                
+                <button
+                  onClick={() => onToggleTask(primaryTask.id)}
+                  className="border border-white/10 hover:border-white/20 hover:bg-white/5 text-zinc-300 font-mono text-[9px] font-bold uppercase tracking-widest px-3.5 py-1.5 cursor-pointer transition-all"
+                >
+                  Complete
+                </button>
+              </div>
 
-              {activeProjects.length === 0 && (
-                <div className="text-center py-4 border border-zinc-900 border-dashed">
-                  <p className="text-[10px] text-zinc-600 font-mono">No active projects. Map project space in node universe.</p>
+              {/* Focus duration log */}
+              <div className="flex items-center gap-2 font-mono text-zinc-400 text-xs font-bold bg-white/[0.01] px-2.5 py-1.5 border border-white/5">
+                <Clock className="w-3.5 h-3.5 text-zinc-500" />
+                {activeTimer && activeTimer.taskId === primaryTask.id ? (
+                  <span className="text-sm font-black text-white">{formatTimerVal(activeTimerSeconds)}</span>
+                ) : (
+                  <span className="text-[10px] text-zinc-500 uppercase tracking-wide">IDLE</span>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-5 py-2">
+            <div className="space-y-2 text-center md:text-left">
+              <span className="text-[8px] font-mono uppercase tracking-widest text-zinc-500 font-black block">WORKSPACE SESSION INTEGRITY</span>
+              <p className="text-xs text-zinc-400 font-sans leading-relaxed">
+                Clear cognitive overhead. Declare or select exactly <span className="text-white font-bold">one primary task</span> to focus on.
+              </p>
+            </div>
+
+            {/* Capture New Focus Box */}
+            <form onSubmit={handleCreateAndAnchorSubmit} className="space-y-2">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={newTaskInput}
+                  onChange={(e) => setNewTaskInput(e.target.value)}
+                  placeholder="What is your immediate anchor focus?"
+                  maxLength={70}
+                  className="w-full bg-zinc-900/40 border border-white/10 py-2.5 pl-3.5 pr-14 text-xs text-white font-mono focus:outline-none focus:border-white placeholder:text-zinc-700 transition-colors"
+                />
+                <button
+                  type="submit"
+                  disabled={!newTaskInput.trim()}
+                  className="absolute right-1.5 top-1.5 px-3 py-1 bg-white disabled:bg-zinc-900 disabled:text-zinc-700 text-black rounded-none text-[8px] font-mono uppercase font-black transition-all"
+                >
+                  Anchor
+                </button>
+              </div>
+            </form>
+
+            {/* Backlog Quick Selection */}
+            {alternativeRecommendations.length > 0 && (
+              <div className="space-y-2 pt-2 border-t border-white/5">
+                <span className="text-[8px] font-mono text-zinc-600 uppercase font-black tracking-widest block">
+                  OR CHOOSE FROM BACKLOG:
+                </span>
+                <div className="space-y-1.5">
+                  {alternativeRecommendations.map(alt => (
+                    <button
+                      key={alt.id}
+                      onClick={() => onSetPrimary(alt.id)}
+                      className="w-full text-left p-2 border border-white/5 hover:border-white/10 bg-zinc-950/20 text-xs font-mono text-zinc-400 hover:text-white flex justify-between items-center transition-all"
+                    >
+                      <span className="truncate pr-4">{alt.text}</span>
+                      <ArrowRight className="w-3 h-3 text-zinc-600 shrink-0" />
+                    </button>
+                  ))}
                 </div>
-              )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* 3. Weekly Stats (Compact) */}
+      <div className="space-y-3">
+        <span className="text-[10px] font-mono uppercase tracking-[0.2em] font-black text-zinc-500 block text-center md:text-left">
+          WEEKLY DISCIPLINE PROFILE
+        </span>
+        <div className="grid grid-cols-3 gap-3">
+          {/* Completion Stat */}
+          <div className="border border-white/5 bg-zinc-950/25 p-3 flex flex-col justify-between h-20 md:h-22">
+            <span className="text-[8px] font-mono uppercase text-zinc-500 tracking-wider font-bold">COMPLETES</span>
+            <div className="flex items-baseline gap-1 mt-1">
+              <h4 className="text-xl md:text-2xl font-mono font-black text-white">{weeklyStats.completions}</h4>
+              <span className="text-[10px] font-mono text-zinc-600">tasks</span>
             </div>
           </div>
 
-        </div>
+          {/* Time Stat */}
+          <div className="border border-white/5 bg-zinc-950/25 p-3 flex flex-col justify-between h-20 md:h-22">
+            <span className="text-[8px] font-mono uppercase text-zinc-500 tracking-wider font-bold">TIME SPENT</span>
+            <div className="flex items-baseline gap-0.5 mt-1">
+              <h4 className="text-xl md:text-2xl font-mono font-black text-white">{weeklyStats.hours}</h4>
+              <span className="text-[10px] font-mono text-zinc-600">hrs</span>
+            </div>
+          </div>
 
-      </div>
-
-      {/* Recommended Next Actions Checklist */}
-      {recommendations.length > 0 && (
-        <div className="space-y-4 pt-4 border-t border-white/5">
-          <span className="text-[10px] font-mono uppercase tracking-[0.25em] text-zinc-500 font-bold block">
-            Recommended Focus Trajectories
-          </span>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {recommendations.map(rec => (
-              <div 
-                key={rec.id} 
-                className="p-4 bg-[#0a0a0c] border border-white/5 hover:border-white/10 transition-all flex flex-col justify-between h-32"
-              >
-                <div className="space-y-1.5 min-w-0">
-                  <p className="text-[10px] font-sans font-medium text-zinc-300 leading-snug line-clamp-2">
-                    {rec.text}
-                  </p>
-                </div>
-                
-                <button
-                  onClick={() => onSetPrimary(rec.id)}
-                  className="text-white hover:text-orange-400 font-mono text-[9px] uppercase tracking-widest flex items-center justify-between w-full pt-4 group transition-colors cursor-pointer"
-                >
-                  <span>Anchor Focus</span>
-                  <ArrowRight className="w-3 h-3 text-zinc-500 group-hover:translate-x-1 transition-transform" />
-                </button>
-              </div>
-            ))}
+          {/* Streak Stat */}
+          <div className="border border-white/5 bg-zinc-950/25 p-3 flex flex-col justify-between h-20 md:h-22 relative group">
+            <span className="text-[8px] font-mono uppercase text-zinc-500 tracking-wider font-bold flex items-center gap-1">
+              STREAK <Flame className="w-2.5 h-2.5 text-orange-400 fill-orange-500/10" />
+            </span>
+            <div className="flex items-baseline gap-0.5 mt-1">
+              <h4 className="text-xl md:text-2xl font-mono font-black text-orange-400">{streak}</h4>
+              <span className="text-[10px] font-mono text-zinc-600">days</span>
+            </div>
           </div>
         </div>
-      )}
-
-      {/* Gemini Cognitive Intelligence Advisor Section */}
-      <div className="border-t border-white/5 pt-8">
-        <GeminiAdvisor 
-          tasks={tasks}
-          allTasks={allTasks}
-          reflections={reflections}
-          goals={goals}
-          onSetPrimary={onSetPrimary}
-        />
       </div>
 
+      {/* 4. Explore More Button */}
+      <div className="pt-4 text-center">
+        <button
+          onClick={() => {
+            if (onExploreMore) {
+              onExploreMore();
+            } else if (onSwitchView) {
+              onSwitchView('PROJECTS');
+            }
+          }}
+          className="w-full py-2.5 border border-white/10 hover:border-white/30 hover:bg-white/[0.02] text-xs font-mono font-black uppercase tracking-[0.2em] text-zinc-300 hover:text-white transition-all cursor-pointer flex items-center justify-center gap-2"
+        >
+          <span>Explore Workspace Portal</span>
+          <ArrowRight className="w-3.5 h-3.5" />
+        </button>
+      </div>
     </motion.div>
   );
 }

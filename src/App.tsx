@@ -25,10 +25,13 @@ import {
   Bell,
   Cloud,
   Flame,
-  Compass,
-  Archive
+  Compass, 
+  Archive,
+  Lock,
+  HelpCircle
 } from 'lucide-react';
 import { useAnchorState } from './hooks/useAnchorState';
+import { OnboardingTour } from './components/OnboardingTour';
 import { DashboardPage } from './pages/DashboardPage';
 import { ManagePage } from './pages/ManagePage';
 import { InsightsPage } from './pages/InsightsPage';
@@ -41,17 +44,20 @@ import { ProjectsPage } from './pages/ProjectsPage';
 import { CapturePage } from './pages/CapturePage';
 import { ReviewPage } from './pages/ReviewPage';
 import { LibraryPage } from './pages/LibraryPage';
+import { HelpPage } from './pages/HelpPage';
 import { StreakDashboard } from './components/StreakDashboard';
 import { Confetti } from './components/Confetti';
 import { EodCheckModal } from './components/EodCheckModal';
+import { EodReflectionModal } from './components/EodReflectionModal';
 import { NotificationCenter } from './components/NotificationCenter';
 import { ReflectionTag } from './types';
 
-type View = 'TODAY' | 'PROJECTS' | 'CAPTURE' | 'REVIEW' | 'LIBRARY' | 'DASHBOARD' | 'MANAGE' | 'INSIGHTS' | 'GOALS' | 'REFLECTIONS' | 'SETTINGS' | 'SYNC' | 'STREAKS';
+type View = 'TODAY' | 'PROJECTS' | 'CAPTURE' | 'REVIEW' | 'LIBRARY' | 'DASHBOARD' | 'MANAGE' | 'INSIGHTS' | 'GOALS' | 'REFLECTIONS' | 'SETTINGS' | 'SYNC' | 'STREAKS' | 'HELP';
 
 export default function App() {
   const { 
     state, 
+    toggleGoalsFeature,
     addTask, 
     addIdea,
     processIdea,
@@ -84,6 +90,7 @@ export default function App() {
     stopTimer,
     addManualTimeLog,
     updateTaskEstimate,
+    updateTaskText,
     toggleTimeTracking,
     updateDailyTimeBudget,
     addTimeBlock,
@@ -105,6 +112,11 @@ export default function App() {
   } = useAnchorState();
   
   const [currentView, setCurrentView] = useState<View>('TODAY');
+  const [isOnboardingActive, setIsOnboardingActive] = useState(() => {
+    return localStorage.getItem('anchor_onboarding_completed') !== 'true';
+  });
+  const [isNavUnlocked, setIsNavUnlocked] = useState(false);
+  const isLanderMode = currentView === 'TODAY' && !isNavUnlocked;
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [showSwitchConfirm, setShowSwitchConfirm] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -121,11 +133,57 @@ export default function App() {
 
   // States for Unified Quick Capture Drawer
   const [isQuickCaptureOpen, setIsQuickCaptureOpen] = useState(false);
-  const [captureTab, setCaptureTab] = useState<'TASK' | 'IDEA' | 'REFLECTION'>('TASK');
+  const [captureTab, setCaptureTab] = useState<'TASK' | 'IDEA'>('TASK');
   const [taskText, setTaskText] = useState('');
   const [ideaText, setIdeaText] = useState('');
-  const [reflectionText, setReflectionText] = useState('');
-  const [reflectionTag, setReflectionTag] = useState<ReflectionTag>('Insight');
+
+  const [skippedEodDate, setSkippedEodDate] = useState<string | null>(() => {
+    return localStorage.getItem('anchor_reflection_skipped_date');
+  });
+
+  const hasReflectedToday = (state.reflections || []).some(ref => {
+    return new Date(ref.createdAt || ref.date).toDateString() === new Date().toDateString();
+  });
+
+  const shouldShowEodModal = React.useMemo(() => {
+    if (hasReflectedToday) return false;
+    const todayStr = new Date().toDateString();
+    if (skippedEodDate === todayStr) return false;
+    if (isLanderMode || isOnboardingActive) return false;
+
+    const eodPromptTime = state.notificationSettings?.eodPromptTime || '17:00';
+    const [eodHour, eodMin] = eodPromptTime.split(':').map(Number);
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMin = now.getMinutes();
+
+    return currentHour > eodHour || (currentHour === eodHour && currentMin >= eodMin);
+  }, [hasReflectedToday, skippedEodDate, isLanderMode, isOnboardingActive, state.notificationSettings?.eodPromptTime]);
+
+  const handleSaveEodReflection = (
+    whatWorked: string,
+    whatBlocked: string,
+    whatSurprised: string,
+    whatToDoDifferently: string,
+    moodEnergy: number
+  ) => {
+    addReflection(
+      'EOD Reflection',
+      'Insight' as ReflectionTag,
+      whatWorked,
+      whatBlocked,
+      whatSurprised,
+      whatToDoDifferently,
+      moodEnergy,
+      5 // Default stressLevel
+    );
+  };
+
+  const handleSkipEodReflection = () => {
+    const todayStr = new Date().toDateString();
+    localStorage.setItem('anchor_reflection_skipped_date', todayStr);
+    setSkippedEodDate(todayStr);
+  };
 
   const primaryTask = state.tasks?.find(t => t.id === state.primaryTaskId);
   const today = new Date().toISOString().split('T')[0];
@@ -140,11 +198,12 @@ export default function App() {
   };
 
   const navItems = [
-    { view: 'TODAY' as View, label: 'Today', icon: <Compass className="w-4 h-4" /> },
-    { view: 'PROJECTS' as View, label: 'Projects', icon: <Target className="w-4 h-4 text-orange-500" /> },
-    { view: 'CAPTURE' as View, label: 'Capture', icon: <Zap className="w-4 h-4 text-amber-400" /> },
-    { view: 'REVIEW' as View, label: 'Review', icon: <BookOpen className="w-4 h-4 text-blue-400" /> },
-    { view: 'LIBRARY' as View, label: 'Library', icon: <Archive className="w-4 h-4 text-zinc-400" /> },
+    { view: 'TODAY' as View, label: 'Today', icon: <Compass className="w-4 h-4 text-orange-500" /> },
+    { view: 'INSIGHTS' as View, label: 'Insights', icon: <BarChart3 className="w-4 h-4 text-emerald-500" /> },
+    { view: 'REFLECTIONS' as View, label: 'Reflections', icon: <BookOpen className="w-4 h-4 text-amber-500" /> },
+    { view: 'GOALS' as View, label: 'Goals', icon: <Target className="w-4 h-4 text-red-500" /> },
+    { view: 'SETTINGS' as View, label: 'Settings', icon: <Settings className="w-4 h-4 text-zinc-400" /> },
+    { view: 'HELP' as View, label: 'Help', icon: <HelpCircle className="w-4 h-4 text-teal-400" /> },
   ];
 
   // Quick Capture submissions handlers
@@ -162,127 +221,63 @@ export default function App() {
         setIdeaText('');
         setIsQuickCaptureOpen(false);
       }
-    } else if (captureTab === 'REFLECTION') {
-      if (reflectionText.trim()) {
-        addReflection(reflectionText.trim(), reflectionTag);
-        setReflectionText('');
-        setIsQuickCaptureOpen(false);
-      }
     }
   };
 
   return (
     <div className="min-h-screen w-full max-w-full md:max-w-4xl lg:max-w-5xl mx-auto flex flex-col bg-[#050505] text-white selection:bg-white selection:text-black shadow-2xl relative overflow-x-hidden md:border-x border-white/5 pb-24">
       {/* Header */}
-      <header className="p-4 md:px-8 md:py-6 flex justify-between items-center border-b border-white/5 sticky top-0 bg-[#050505]/80 backdrop-blur-md z-40">
-        <div className="flex items-center gap-3">
-          {/* Burger button - visible on mobile/tablet, hidden on desktop */}
+      {!isLanderMode && (
+        <header className="p-4 md:px-8 md:py-6 flex justify-between items-center border-b border-white/5 sticky top-0 bg-[#050505]/80 backdrop-blur-md z-40">
+        <div className="flex items-center gap-4">
+          {/* Burger button - visible on all screens (unifies navigation) */}
           <button 
             onClick={() => setIsSidebarOpen(true)}
-            className="md:hidden p-1 px-2 border border-white/10 hover:border-white/50 hover:bg-white/5 transition-all outline-none"
-            title="Open navigation Menu"
+            className="p-2 border border-white/10 hover:border-white/50 hover:bg-white/5 transition-all outline-none min-w-[40px] min-h-[40px] flex items-center justify-center cursor-pointer"
+            title="Open system navigation Drawer"
           >
-            <Menu className="w-4 h-4" />
+            <Menu className="w-5 h-5" />
           </button>
           
           <div className="flex items-center gap-1.5 cursor-pointer" onClick={() => setCurrentView('TODAY')}>
-            <Anchor className="w-4 h-4 text-orange-500" />
-            <h1 className="text-xl font-black tracking-tighter uppercase text-white">Anchor</h1>
+            <Anchor className="w-4 h-4 text-orange-500 animate-pulse" />
+            <span className="text-sm font-black tracking-widest uppercase text-white font-mono">Anchor</span>
           </div>
         </div>
-
-        {/* Desktop horizontal navigation tabs */}
-        <nav className="hidden md:flex items-center gap-1 bg-zinc-950/40 p-1 border border-white/5">
-          {navItems.map(item => {
-            const isActive = currentView === item.view;
-            return (
-              <button
-                key={item.view}
-                onClick={() => setCurrentView(item.view)}
-                className={`flex items-center gap-2 px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-widest transition-all hover:bg-white/[0.02] ${
-                  isActive ? 'bg-white text-black' : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                {item.icon}
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
         
         <div className="flex items-center gap-2">
-          {/* Blocks manager Shortcut */}
-          <button
-            onClick={() => setCurrentView('MANAGE')}
-            className={`p-1 border transition-colors duration-150 outline-none w-6 h-6 flex items-center justify-center cursor-pointer ${
-              currentView === 'MANAGE'
-                ? 'bg-zinc-100 border-white text-black'
-                : 'border-white/10 hover:border-white/30 hover:bg-white/5 text-zinc-400 hover:text-white'
-            }`}
-            title="Manage Time Blocks Scheduling"
-          >
-            <Sliders className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Streak System Shortcut */}
-          <button
-            onClick={() => setCurrentView('STREAKS')}
-            className={`p-1 border transition-colors duration-150 outline-none w-6 h-6 flex items-center justify-center cursor-pointer ${
-              currentView === 'STREAKS'
-                ? 'bg-orange-600 border-orange-500 text-white'
-                : 'border-white/10 hover:border-white/30 hover:bg-white/5 text-orange-400'
-            }`}
-            title="Streak Rules & Milestones Status"
-          >
-            <Flame className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Settings Shortcut */}
-          <button
-            onClick={() => setCurrentView('SETTINGS')}
-            className={`p-1 border transition-colors duration-150 outline-none w-6 h-6 flex items-center justify-center cursor-pointer ${
-              currentView === 'SETTINGS'
-                ? 'bg-zinc-100 border-white text-black'
-                : 'border-white/10 hover:border-white/30 hover:bg-white/5 text-zinc-400 hover:text-white'
-            }`}
-            title="Preferences & Reset Options"
-          >
-            <Settings className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Cloud Sync Status Indicator */}
-          <button
-            onClick={() => setCurrentView('SYNC')}
-            className={`p-1 px-2 border transition-all duration-150 outline-none h-6 flex items-center justify-center cursor-pointer gap-1.5 text-[9px] font-mono font-bold tracking-widest uppercase ${
-              currentView === 'SYNC'
-                ? 'bg-orange-600 border-orange-500 text-white'
-                : 'border-white/10 hover:border-white/45 hover:bg-white/5 text-zinc-400 hover:text-white'
-            }`}
-            title="Configure Cloud Backup Sync & view low-level telemetry"
-          >
-            <Cloud className="w-3 h-3" />
-            <span className="hidden sm:inline">CLOUD</span>
-          </button>
-
           {/* Bell Icon Trigger */}
           <button
             onClick={() => setIsNotificationOpen(true)}
-            className="p-1 px-2 border border-white/10 hover:border-white/40 hover:bg-white/5 transition-all outline-none relative group h-6 flex items-center justify-center cursor-pointer"
-            title="Open Notification Center telemetry"
+            className="p-2 border border-white/10 hover:border-white/40 hover:bg-white/5 transition-all outline-none relative group min-w-[40px] min-h-[40px] flex items-center justify-center cursor-pointer"
+            title="Open Notification Center"
           >
-            <Bell className="w-3.5 h-3.5 text-zinc-400 group-hover:text-white" />
+            <Bell className="w-4 h-4 text-zinc-400 group-hover:text-white" />
             {(state.notifications || []).filter(n => !n.read).length > 0 && (
               <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-orange-600 rounded-none animate-pulse" />
             )}
           </button>
           
-          <div className="text-[9px] font-mono text-zinc-500 bg-white/[0.02] border border-white/5 py-1 px-2.5 uppercase tracking-wider h-6 flex items-center">
+          <div className="text-[9px] font-mono text-zinc-500 bg-white/[0.02] border border-white/5 py-1 px-2.5 uppercase tracking-wider h-10 flex items-center">
             {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
           </div>
+
+          {/* Lock UI Button to transition back to focus lander */}
+          {currentView === 'TODAY' && (
+            <button
+              onClick={() => setIsNavUnlocked(false)}
+              className="p-1 px-2 border border-white/10 hover:border-white/35 hover:bg-white/5 text-zinc-400 hover:text-white h-10 flex items-center justify-center cursor-pointer text-[9px] font-mono font-bold tracking-widest uppercase gap-1"
+              title="Return to clean landing focus view"
+            >
+              <Lock className="w-3 h-3 text-orange-500/80" />
+              <span className="hidden sm:inline">Focus Mode</span>
+            </button>
+          )}
         </div>
       </header>
+      )}
 
-      {/* Sliding Collapsible Sidebar Navigation Panel Drawer - visible only on Mobile/Tablet */}
+      {/* Sliding Collapsible Sidebar Navigation Panel Drawer - visible on all screen sizes */}
       <AnimatePresence>
         {isSidebarOpen && (
           <>
@@ -292,7 +287,7 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsSidebarOpen(false)}
-              className="fixed inset-0 bg-black/85 backdrop-blur-md z-[101] md:hidden"
+              className="fixed inset-0 bg-black/85 backdrop-blur-md z-[101]"
             />
 
             {/* Sidebar content */}
@@ -301,18 +296,18 @@ export default function App() {
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed top-0 left-0 bottom-0 w-[260px] bg-[#090a0c] border-r border-white/10 z-[102] p-6 flex flex-col justify-between shadow-[20px_0_50px_rgba(0,0,0,0.8)] md:hidden font-mono"
+              className="fixed top-0 left-0 bottom-0 w-[280px] sm:w-[320px] bg-[#090a0c] border-r border-white/10 z-[102] p-6 flex flex-col justify-between shadow-[20px_0_50px_rgba(0,0,0,0.8)] font-mono"
             >
               <div className="space-y-8">
                 {/* Close & Brand Header */}
                 <div className="flex justify-between items-center border-b border-white/5 pb-4">
                   <div className="flex items-center gap-2">
-                    <Anchor className="w-5 h-5 text-orange-500" />
+                    <Anchor className="w-5 h-5 text-orange-500 animate-spin" style={{ animationDuration: '3s' }} />
                     <span className="text-sm font-black uppercase tracking-widest text-white">Navigation</span>
                   </div>
                   <button 
                     onClick={() => setIsSidebarOpen(false)}
-                    className="p-1 border border-white/5 hover:border-white/20 hover:bg-white/5 transition-all"
+                    className="p-2 border border-white/10 hover:border-white/30 hover:bg-white/5 transition-all text-zinc-400 hover:text-white"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -320,7 +315,7 @@ export default function App() {
 
                 {/* Navigation Items list */}
                 <div className="space-y-1">
-                  {navItems.map(item => {
+                  {navItems.filter(item => item.view !== 'GOALS' || state.goalsEnabled).map(item => {
                     const isActive = currentView === item.view;
                     return (
                       <button
@@ -329,18 +324,37 @@ export default function App() {
                           setCurrentView(item.view);
                           setIsSidebarOpen(false);
                         }}
-                        className={`flex items-center gap-3 w-full p-3 transition-all hover:bg-white/[0.02] border-l-2 text-left ${
+                        className={`flex items-center gap-3.5 w-full min-h-[48px] p-3.5 px-4 transition-all hover:bg-white/[0.03] active:bg-white/[0.05] border-l-2 text-left cursor-pointer ${
                           isActive 
-                            ? 'border-orange-500 text-white bg-white/[0.01]' 
+                            ? 'border-orange-500 text-white bg-white/[0.02] font-black' 
                             : 'border-transparent text-zinc-500 hover:text-white'
                         }`}
                       >
                         {item.icon}
-                        <span className="text-xs uppercase font-bold tracking-widest">{item.label}</span>
+                        <span className="text-xs uppercase font-extrabold tracking-widest">{item.label}</span>
                         {isActive && <div className="w-1.5 h-1.5 rounded-full bg-orange-500 ml-auto" />}
                       </button>
                     );
                   })}
+                </div>
+
+                {/* Quick actions moved to drawer */}
+                <div className="pt-4 border-t border-white/5 space-y-2">
+                  <span className="text-[8px] font-mono text-zinc-650 uppercase tracking-[0.2em] font-black block mb-1">
+                    Quick Capture Vault
+                  </span>
+                  <button
+                    onClick={() => {
+                      setIsSidebarOpen(false);
+                      setIsQuickCaptureOpen(true);
+                    }}
+                    className="flex items-center gap-3 w-full p-2.5 px-3 bg-[#111215] hover:bg-zinc-900 border border-white/10 hover:border-white/20 transition-all text-left group cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4 text-orange-500 group-hover:rotate-90 transition-transform duration-300" />
+                    <span className="text-[9px] uppercase font-bold tracking-wider text-zinc-300 group-hover:text-white">
+                      Capture Idea / Task
+                    </span>
+                  </button>
                 </div>
               </div>
 
@@ -373,6 +387,8 @@ export default function App() {
               isContinuingTask={state.isContinuingTask}
               reflections={state.reflections || []}
               goals={state.goals || []}
+              notificationSettings={state.notificationSettings}
+              onAddReflection={addReflection}
               onSetPrimary={handleSetPrimary}
               onToggleTask={toggleTaskStatus}
               onAddSubtask={addSubtask}
@@ -388,12 +404,23 @@ export default function App() {
               onStopTimer={stopTimer}
               onAddManualTimeLog={addManualTimeLog}
               onUpdateTaskEstimate={updateTaskEstimate}
+              onUpdateTaskText={updateTaskText}
+              onDeleteTask={deleteTask}
+              onAbandonTask={abandonTask}
+              onLinkTaskToGoal={linkTaskToGoal}
+              onSetTaskDependency={setTaskDependency}
+              onAssignBlock={assignToBlock}
               onQuickCapture={(type, text) => {
                 if (type === 'TASK') addTask(text);
                 else if (type === 'IDEA') addIdea(text);
-                else addReflection(text, 'Insight');
               }}
               onSwitchView={(v) => setCurrentView(v)}
+              onAddTask={(text, category, isPrimary) => {
+                addTask(text, category, isPrimary);
+              }}
+              onExploreMore={() => {
+                setIsNavUnlocked(true);
+              }}
             />
           )}
 
@@ -420,7 +447,6 @@ export default function App() {
               reflections={state.reflections || []}
               onAddTask={addTask}
               onAddIdea={addIdea}
-              onAddReflection={addReflection}
             />
           )}
 
@@ -431,7 +457,6 @@ export default function App() {
               reflections={state.reflections || []}
               dailyTodos={state.dailyTodos || {}}
               timeLogs={state.timeLogs || []}
-              onAddReflection={addReflection}
               onDeleteReflection={deleteReflection}
             />
           )}
@@ -474,10 +499,15 @@ export default function App() {
               onStopTimer={stopTimer}
               onAddManualTimeLog={addManualTimeLog}
               onUpdateTaskEstimate={updateTaskEstimate}
+              onUpdateTaskText={updateTaskText}
+              onDeleteTask={deleteTask}
+              onAbandonTask={abandonTask}
+              onLinkTaskToGoal={linkTaskToGoal}
+              onSetTaskDependency={setTaskDependency}
+              onAssignBlock={assignToBlock}
               onQuickCapture={(type, text) => {
                 if (type === 'TASK') addTask(text);
                 else if (type === 'IDEA') addIdea(text);
-                else addReflection(text, 'Insight');
               }}
               onSwitchView={(v) => setCurrentView(v)}
             />
@@ -515,20 +545,20 @@ export default function App() {
           )}
 
           {currentView === 'INSIGHTS' && (
-            <ReviewPage
-              key="review-legacy-insights"
+            <InsightsPage
+              key="insights"
               tasks={state.tasks || []}
               reflections={state.reflections || []}
               dailyTodos={state.dailyTodos || {}}
+              timeTrackingEnabled={state.timeTrackingEnabled !== undefined ? state.timeTrackingEnabled : true}
               timeLogs={state.timeLogs || []}
-              onAddReflection={addReflection}
-              onDeleteReflection={deleteReflection}
+              dailyTimeBudget={state.dailyTimeBudget !== undefined ? state.dailyTimeBudget : 480}
             />
           )}
 
           {currentView === 'GOALS' && (
-            <ProjectsPage
-              key="projects-legacy"
+            <GoalsPage
+              key="goals"
               goals={state.goals || []}
               allTasks={state.tasks || []}
               onAddGoal={addGoal}
@@ -536,20 +566,22 @@ export default function App() {
               onUpdateGoalStatus={updateGoalStatus}
               onToggleKeyResult={toggleGoalKeyResult}
               onDeleteGoal={deleteGoal}
-              onAddTask={addTask}
-              onSetPrimary={handleSetPrimary}
             />
           )}
 
           {currentView === 'REFLECTIONS' && (
-            <ReviewPage
-              key="review-legacy-ref"
-              tasks={state.tasks || []}
+            <ReflectionsPage
+              key="reflections"
               reflections={state.reflections || []}
-              dailyTodos={state.dailyTodos || {}}
-              timeLogs={state.timeLogs || []}
-              onAddReflection={addReflection}
+              allTasks={state.tasks || []}
               onDeleteReflection={deleteReflection}
+            />
+          )}
+
+          {currentView === 'HELP' && (
+            <HelpPage
+              key="help"
+              onSwitchView={(v) => setCurrentView(v)}
             />
           )}
 
@@ -583,6 +615,12 @@ export default function App() {
               }}
               updateNotificationSettings={updateNotificationSettings}
               onReset={resetAllState}
+              onLaunchOnboarding={() => {
+                setIsOnboardingActive(true);
+                setCurrentView('TODAY');
+              }}
+              goalsEnabled={state.goalsEnabled || false}
+              toggleGoalsEnabled={toggleGoalsFeature}
             />
           )}
 
@@ -619,17 +657,19 @@ export default function App() {
       </main>
 
       {/* QUICK ACTIONS HUB - Persistent Multi-Purpose capture floating trigger */}
-      <div className="fixed bottom-16 right-6 z-40">
-        <motion.button
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => setIsQuickCaptureOpen(true)}
-          className="w-14 h-14 bg-white text-black rounded-full shadow-[0_0_25px_rgba(255,255,255,0.25)] flex items-center justify-center z-50 border-2 border-white cursor-pointer"
-          title="Open Quick Capture Center"
-        >
-          <Plus className="w-8 h-8" />
-        </motion.button>
-      </div>
+      {!isLanderMode && currentView !== 'TODAY' && (
+        <div className="fixed bottom-16 right-6 z-40">
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setIsQuickCaptureOpen(true)}
+            className="w-14 h-14 bg-white text-black rounded-full shadow-[0_0_25px_rgba(255,255,255,0.25)] flex items-center justify-center z-50 border-2 border-white cursor-pointer"
+            title="Open Quick Capture Center"
+          >
+            <Plus className="w-8 h-8" />
+          </motion.button>
+        </div>
+      )}
 
       {/* Quick Unified Capture Drawer Modal */}
       <AnimatePresence>
@@ -656,8 +696,8 @@ export default function App() {
               </div>
 
               {/* Subtabs chooser */}
-              <div className="grid grid-cols-3 border border-white/5 bg-[#090a0c] p-1 mb-5">
-                {(['TASK', 'IDEA', 'REFLECTION'] as const).map(tab => {
+              <div className="grid grid-cols-2 border border-white/5 bg-[#090a0c] p-1 mb-5">
+                {(['TASK', 'IDEA'] as const).map(tab => {
                   const isActive = captureTab === tab;
                   return (
                     <button
@@ -710,38 +750,6 @@ export default function App() {
                   </div>
                 )}
 
-                {captureTab === 'REFLECTION' && (
-                  <div className="space-y-4">
-                    <textarea
-                      autoFocus
-                      required
-                      value={reflectionText}
-                      onChange={(e) => setReflectionText(e.target.value)}
-                      placeholder="Capture raw telemetry, lesson, or focus blocker..."
-                      className="w-full bg-transparent border border-white/5 p-3 text-sm font-mono h-20 resize-none focus:outline-none focus:border-white transition-all text-white placeholder:text-zinc-700"
-                      maxLength={150}
-                    />
-                    
-                    <div className="flex gap-2 justify-start items-center">
-                      <span className="text-[9px] font-mono text-zinc-500 uppercase">Tag:</span>
-                      {(['Insight', 'Reminder', 'Mistake'] as ReflectionTag[]).map(tag => (
-                        <button
-                          key={tag}
-                          type="button"
-                          onClick={() => setReflectionTag(tag)}
-                          className={`text-[9px] font-mono uppercase tracking-widest py-1 px-3 border transition-all ${
-                            reflectionTag === tag 
-                              ? 'border-white bg-white text-black font-black' 
-                              : 'border-white/10 text-zinc-500 hover:text-white'
-                          }`}
-                        >
-                          {tag}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 <button
                   type="submit"
                   className="w-full py-3 bg-white text-black font-black font-mono text-xs uppercase tracking-widest hover:opacity-90 active:scale-95 transition-all mt-2"
@@ -760,13 +768,7 @@ export default function App() {
           <span className="w-1.5 h-1.5 bg-orange-500 rounded-none animate-pulse" />
           Anchor Session Live
         </span>
-        <button 
-          onClick={() => setIsSidebarOpen(true)}
-          className="md:hidden tracking-wider text-orange-400 hover:text-white transition-colors"
-        >
-          Menu Menu
-        </button>
-        <span className="text-zinc-700 hidden md:inline">PEAK DISCIPLINE OPERATIVE</span>
+        <span className="text-zinc-700">PEAK DISCIPLINE OPERATIVE</span>
       </div>
 
       {/* Modals check */}
@@ -774,6 +776,12 @@ export default function App() {
         isOpen={!!state.pendingEodCheck}
         taskText={state.pendingEodCheck?.taskText || ''}
         onComplete={completeEodCheck}
+      />
+
+      <EodReflectionModal
+        isOpen={shouldShowEodModal}
+        onSave={handleSaveEodReflection}
+        onSkip={handleSkipEodReflection}
       />
 
       {/* Confirmation Anchor Switch */}
@@ -842,6 +850,22 @@ export default function App() {
 
       {showCelebrationConfetti && (
         <Confetti onComplete={() => setShowCelebrationConfetti(false)} />
+      )}
+
+      {isOnboardingActive && (
+        <OnboardingTour
+          onAddTask={addTask}
+          onSetPrimary={setPrimaryTask}
+          onAddSubtask={addSubtask}
+          onAddReflection={addReflection}
+          onStartTimer={(taskId, isPom, dur) => {
+            // start timer in hook
+            startTimer(taskId, isPom, dur);
+          }}
+          onStopTimer={stopTimer}
+          onComplete={() => setIsOnboardingActive(false)}
+          tasks={state.tasks || []}
+        />
       )}
     </div>
   );

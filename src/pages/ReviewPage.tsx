@@ -37,7 +37,6 @@ interface ReviewPageProps {
   reflections: Reflection[];
   dailyTodos: { [date: string]: DailyTodo[] };
   timeLogs?: TimeLog[];
-  onAddReflection: (text: string, tag: ReflectionTag, journal?: any) => void;
   onDeleteReflection: (id: string) => void;
 }
 
@@ -48,18 +47,9 @@ export function ReviewPage({
   reflections = [],
   dailyTodos = {},
   timeLogs = [],
-  onAddReflection,
   onDeleteReflection
 }: ReviewPageProps) {
   const [activeSubTab, setActiveSubTab] = useState<ReviewSubTab>('THIS_WEEK');
-
-  // Reflection form input states for the embedded mini-ournal builder
-  const [newReflectionText, setNewReflectionText] = useState('');
-  const [reflectionTag, setReflectionTag] = useState<ReflectionTag>('Insight');
-  const [journalWhatWorked, setJournalWhatWorked] = useState('');
-  const [journalWhatBlocked, setJournalWhatBlocked] = useState('');
-  const [journalEnergy, setJournalEnergy] = useState(7);
-  const [journalStress, setJournalStress] = useState(3);
 
   // 1. Calculations: This Week
   const thisWeekStats = useMemo(() => {
@@ -112,34 +102,15 @@ export function ReviewPage({
       }));
     }
 
-    return reflections
-      .sort((a,b) => a.createdAt - b.createdAt)
+    return [...reflections]
+      .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
       .slice(-7)
-      .map((r, idx) => ({
-        day: new Date(r.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' }),
+      .map((r) => ({
+        day: new Date(r.createdAt || r.date).toLocaleDateString([], { month: 'short', day: 'numeric' }),
         Energy: r.moodEnergy || 5,
-        Stress: r.stressLevel || 5,
+        Stress: r.stressLevel || 4,
       }));
   }, [reflections]);
-
-  const handleCreateReflection = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newReflectionText.trim()) {
-      onAddReflection(newReflectionText.trim(), reflectionTag, {
-        whatWorked: journalWhatWorked,
-        whatBlocked: journalWhatBlocked,
-        moodEnergy: journalEnergy,
-        stressLevel: journalStress,
-      });
-
-      // Cleanup
-      setNewReflectionText('');
-      setJournalWhatWorked('');
-      setJournalWhatBlocked('');
-      setJournalEnergy(7);
-      setJournalStress(3);
-    }
-  };
 
   return (
     <motion.div
@@ -168,7 +139,6 @@ export function ReviewPage({
         {[
           { key: 'THIS_WEEK' as ReviewSubTab, label: 'This Cycle' },
           { key: 'PATTERNS' as ReviewSubTab, label: 'Patterns & Stress' },
-          { key: 'REFLECTIONS' as ReviewSubTab, label: 'Journal Log' },
           { key: 'ATTENTION_REPORT' as ReviewSubTab, label: 'Attention Tracker' }
         ].map(tab => (
           <button
@@ -290,151 +260,6 @@ export function ReviewPage({
           </motion.div>
         )}
 
-        {/* TAB 3: Reflections Journal Log */}
-        {activeSubTab === 'REFLECTIONS' && (
-          <motion.div
-            key="reflections"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="space-y-6"
-          >
-            {/* Embedded Mini Reflection Entry Journal */}
-            <div className="p-5 border border-white/5 bg-zinc-950/60 space-y-4">
-              <span className="text-[10px] font-mono uppercase tracking-[0.15em] text-zinc-500 block font-bold">Write Context Reflection Note</span>
-              
-              <form onSubmit={handleCreateReflection} className="space-y-4">
-                <textarea
-                  required
-                  value={newReflectionText}
-                  onChange={(e) => setNewReflectionText(e.target.value)}
-                  placeholder="Record what is on your mind, focus hurdles, or learnings..."
-                  className="w-full bg-zinc-950 border border-white/5 p-3 text-xs font-mono text-white h-20 resize-none focus:outline-none focus:border-white transition-all placeholder:text-zinc-700"
-                />
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-[8px] font-mono text-zinc-500 uppercase font-black">Success - What Worked?</label>
-                    <input
-                      type="text"
-                      value={journalWhatWorked}
-                      onChange={(e) => setJournalWhatWorked(e.target.value)}
-                      placeholder="e.g. strict calendar blocks"
-                      className="w-full bg-zinc-950 border border-white/5 p-2 text-xs font-mono text-white focus:outline-none focus:border-white"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[8px] font-mono text-zinc-500 uppercase font-black">Friction - What Blocked?</label>
-                    <input
-                      type="text"
-                      value={journalWhatBlocked}
-                      onChange={(e) => setJournalWhatBlocked(e.target.value)}
-                      placeholder="e.g. constant Slack pings"
-                      className="w-full bg-zinc-950 border border-white/5 p-2 text-xs font-mono text-white focus:outline-none focus:border-white"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-[8px] font-mono text-zinc-500 uppercase font-black">Energy Level ({journalEnergy}/10)</label>
-                    <input
-                      type="range"
-                      min="1"
-                      max="10"
-                      value={journalEnergy}
-                      onChange={(e) => setJournalEnergy(parseInt(e.target.value))}
-                      className="w-full accent-white"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[8px] font-mono text-zinc-500 uppercase font-black">Stress Level ({journalStress}/10)</label>
-                    <input
-                      type="range"
-                      min="1"
-                      max="10"
-                      value={journalStress}
-                      onChange={(e) => setJournalStress(parseInt(e.target.value))}
-                      className="w-full accent-orange-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex justify-between items-center pt-2">
-                  <div className="flex gap-1.5 items-center">
-                    {(['Insight', 'Reminder', 'Mistake'] as ReflectionTag[]).map(t => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => setReflectionTag(t)}
-                        className={`text-[8px] font-mono uppercase tracking-widest py-1 px-2.5 border transition-all cursor-pointer ${
-                          reflectionTag === t ? 'border-white bg-white text-black font-black' : 'border-white/10 text-zinc-500 hover:text-white'
-                        }`}
-                      >
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="p-2 px-6 bg-white hover:bg-zinc-200 text-black font-mono font-black text-[9px] uppercase tracking-widest cursor-pointer transition-colors"
-                  >
-                    Commit Journal
-                  </button>
-                </div>
-              </form>
-            </div>
-
-            {/* List of Reflections */}
-            <div className="space-y-3">
-              <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-500 font-bold block">Historic Reflections Index</span>
-              
-              <div className="space-y-3">
-                {reflections.map(ref => (
-                  <div key={ref.id} className="p-4 bg-zinc-950/30 border border-white/5 space-y-3 relative group hover:border-white/10 transition-all text-left">
-                    <button
-                      onClick={() => onDeleteReflection(ref.id)}
-                      className="absolute top-4 right-4 text-zinc-650 hover:text-red-400 transition-colors cursor-pointer"
-                      title="Purge Journal Node"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-
-                    <div className="flex items-center gap-2 text-[9px] font-mono">
-                      <span className={`px-1.5 py-0.5 border font-bold uppercase ${
-                        ref.tag === 'Mistake' ? 'border-red-500/20 bg-red-950/10 text-red-400' :
-                        ref.tag === 'Insight' ? 'border-blue-500/20 bg-blue-950/10 text-blue-400' :
-                        'border-zinc-500/20 bg-zinc-900/10 text-zinc-400'
-                      }`}>
-                        {ref.tag}
-                      </span>
-                      <span className="text-zinc-500">{new Date(ref.createdAt).toLocaleDateString()}</span>
-                    </div>
-
-                    <p className="text-xs text-zinc-200 font-sans leading-relaxed">
-                      {ref.text}
-                    </p>
-
-                    {(ref.whatWorked || ref.whatBlocked) && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] font-mono pt-2 border-t border-white/[0.03]">
-                        {ref.whatWorked && <span className="text-zinc-400"><strong className="text-zinc-500 font-bold font-mono">✓ WORKED:</strong> {ref.whatWorked}</span>}
-                        {ref.whatBlocked && <span className="text-zinc-400"><strong className="text-zinc-500 font-bold font-mono">✕ BLOCKER:</strong> {ref.whatBlocked}</span>}
-                      </div>
-                    )}
-                  </div>
-                ))}
-
-                {reflections.length === 0 && (
-                  <p className="text-xs text-zinc-600 font-mono italic text-center py-4 border border-dashed border-zinc-900">No reflections committed in this sector yet.</p>
-                )}
-              </div>
-            </div>
-
-          </motion.div>
-        )}
 
         {/* TAB 4: What Received Attention vs What Was Ignored */}
         {activeSubTab === 'ATTENTION_REPORT' && (

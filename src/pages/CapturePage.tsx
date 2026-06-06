@@ -20,7 +20,6 @@ interface CapturePageProps {
   reflections: Reflection[];
   onAddTask: (text: string) => void;
   onAddIdea: (text: string) => void;
-  onAddReflection: (text: string, tag: ReflectionTag) => void;
 }
 
 export function CapturePage({
@@ -28,12 +27,10 @@ export function CapturePage({
   ideas = [],
   reflections = [],
   onAddTask,
-  onAddIdea,
-  onAddReflection
+  onAddIdea
 }: CapturePageProps) {
-  const [activeMode, setActiveMode] = useState<'TASK' | 'IDEA' | 'NOTE'>('TASK');
+  const [activeMode, setActiveMode] = useState<'TASK' | 'IDEA'>('TASK');
   const [inputText, setInputText] = useState('');
-  const [reflectionTag, setReflectionTag] = useState<ReflectionTag>('Insight');
   const [justCaptured, setJustCaptured] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -44,8 +41,6 @@ export function CapturePage({
       onAddTask(inputText.trim());
     } else if (activeMode === 'IDEA') {
       onAddIdea(inputText.trim());
-    } else if (activeMode === 'NOTE') {
-      onAddReflection(inputText.trim(), reflectionTag);
     }
 
     setInputText('');
@@ -107,7 +102,7 @@ export function CapturePage({
 
       {/* Mode selectors */}
       <div className="flex justify-center gap-1.5 p-1 border border-white/5 bg-zinc-950 max-w-md mx-auto">
-        {(['TASK', 'IDEA', 'NOTE'] as const).map(mode => {
+        {(['TASK', 'IDEA'] as const).map(mode => {
           const isActive = activeMode === mode;
           return (
             <button
@@ -120,7 +115,7 @@ export function CapturePage({
                 isActive ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'
               }`}
             >
-              {mode === 'NOTE' ? 'Memory Note' : mode}
+              {mode}
             </button>
           );
         })}
@@ -137,8 +132,7 @@ export function CapturePage({
               onChange={(e) => setInputText(e.target.value)}
               placeholder={
                 activeMode === 'TASK' ? 'I need to code indexing queries...' :
-                activeMode === 'IDEA' ? 'A cognitive notes pipeline concept...' :
-                'Write down a lesson or focus hurdle...'
+                'A cognitive notes pipeline concept...'
               }
               className="w-full bg-transparent text-xl md:text-2xl font-mono text-white placeholder:text-zinc-800 text-center focus:outline-none py-4"
             />
@@ -147,37 +141,16 @@ export function CapturePage({
             <AnimatePresence>
               {justCaptured && (
                 <motion.div 
-                  initial={{ opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  className="absolute left-1/2 -translate-x-1/2 -bottom-6 text-[9px] font-mono text-emerald-400 font-bold capitalize flex items-center gap-1"
+                   initial={{ opacity: 0, y: 5 }}
+                   animate={{ opacity: 1, y: 0 }}
+                   exit={{ opacity: 0 }}
+                   className="absolute left-1/2 -translate-x-1/2 -bottom-6 text-[9px] font-mono text-emerald-400 font-bold capitalize flex items-center gap-1"
                 >
                   <CheckCircle className="w-3.5 h-3.5" /> Signal Locked to Buffer
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
-
-          {/* Subtags panel for Custom Notes */}
-          {activeMode === 'NOTE' && (
-            <div className="flex gap-2 justify-center items-center py-2 animate-fade-in">
-              <span className="text-[9px] font-mono text-zinc-500 uppercase font-black">Memory Tag:</span>
-              {(['Insight', 'Reminder', 'Mistake'] as ReflectionTag[]).map(tag => (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => setReflectionTag(tag)}
-                  className={`text-[9px] font-mono uppercase tracking-widest py-1 px-3 border transition-colors cursor-pointer ${
-                    reflectionTag === tag 
-                      ? 'border-white bg-white text-black font-black' 
-                      : 'border-white/10 text-zinc-500 hover:text-white'
-                  }`}
-                >
-                  {tag}
-                </button>
-              ))}
-            </div>
-          )}
 
           <div className="flex justify-center">
             <button

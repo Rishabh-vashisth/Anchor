@@ -19,6 +19,7 @@ import {
   Gauge,
   Workflow,
   ChevronRight,
+  ChevronLeft,
   Info,
   Sliders,
   History,
@@ -28,7 +29,16 @@ import {
   ThumbsDown,
   Smile,
   Frown,
-  Flame
+  Flame,
+  Search,
+  Filter,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  XCircle,
+  HelpCircle,
+  ArrowRight,
+  ArrowLeft
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -224,20 +234,34 @@ export function InsightsPage({
   timeLogs = [],
   dailyTimeBudget = 480
 }: InsightsPageProps) {
+  // Navigation for onboarding insights vs detailed analytics
+  const [showAllAnalytics, setShowAllAnalytics] = useState(false);
+  const [activeInsightIndex, setActiveInsightIndex] = useState(0);
+  const [dismissedIndices, setDismissedIndices] = useState<number[]>([]);
+
   // Track visual states
   const [activeTab, setActiveTab] = useState<AnalyticsTab>('DASHBOARD');
   const [simulationMode, setSimulationMode] = useState<boolean>(tasks.length < 5);
+  
   // Interactive Drill-down filters
   const [drillDownCategory, setDrillDownCategory] = useState<Category | 'NONE' | 'ALL'>('ALL');
   const [drillDownBlock, setDrillDownBlock] = useState<TimeBlockType | 'ALL'>('ALL');
   const [hoveredCalDay, setHoveredCalDay] = useState<{ date: string; count: number } | null>(null);
   const [selectedCalDay, setSelectedCalDay] = useState<string | null>(null);
 
+  // Search & Filter state for core metrics (DASHBOARD)
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterBlockType, setFilterBlockType] = useState<'ALL' | TimeBlockType>('ALL');
+  const [filterCategoryType, setFilterCategoryType] = useState<'ALL' | Category | 'NONE'>('ALL');
+  const [filterStatusType, setFilterStatusType] = useState<'ALL' | 'completed' | 'pending' | 'abandoned'>('ALL');
+
   // Active dataset combined or simulated
   const activeDataset = useMemo(() => {
     if (simulationMode) {
       // Merge simulation pool with whatever sparse real items exist
-      return [...tasks, ...generateSimulatedData()];
+      return [...tasks, ...generateSimulatedData()].filter((item, pos, self) => 
+        self.findIndex(t => t.id === item.id) === pos
+      );
     }
     return tasks;
   }, [tasks, simulationMode]);
@@ -245,7 +269,9 @@ export function InsightsPage({
   // Active reflections combined or simulated
   const activeReflections = useMemo(() => {
     if (simulationMode) {
-      return [...reflections, ...generateSimulatedReflections()];
+      return [...reflections, ...generateSimulatedReflections()].filter((item, pos, self) => 
+        self.findIndex(r => r.id === item.id) === pos
+      );
     }
     return reflections;
   }, [reflections, simulationMode]);
@@ -253,7 +279,6 @@ export function InsightsPage({
   // Active timelogs combined or simulated
   const activeTimeLogs = useMemo(() => {
     if (simulationMode) {
-      // Build dummy log files for simulated tasks to feed widgets beautifully!
       const mockLogs: TimeLog[] = [];
       const now = Date.now();
       const dayMs = 24 * 60 * 60 * 1000;
@@ -303,8 +328,6 @@ export function InsightsPage({
     }
     return timeLogs;
   }, [timeLogs, simulationMode]);
-
-  const [selectedPredictTaskId, setSelectedPredictTaskId] = useState<string>('');
 
   // Computations for Behavioral Insights model
   const behavioralAnalytics = useMemo(() => {
@@ -372,11 +395,11 @@ export function InsightsPage({
       return hrs < 6;
     }).length;
 
-    let bestTimeOfDayStr = 'Morning Focus (06:00 - 12:00)';
+    let bestTimeOfDayStr = 'Morning Focus (06:00 AM - 12:00 PM)';
     let maxCompVal = morningCompletes;
-    if (afternoonCompletes > maxCompVal) { maxCompVal = afternoonCompletes; bestTimeOfDayStr = 'Afternoon Traction (12:00 - 18:00)'; }
-    if (eveningCompletes > maxCompVal) { maxCompVal = eveningCompletes; bestTimeOfDayStr = 'Evening Review (18:00 - 24:00)'; }
-    if (nightCompletes > maxCompVal) { maxCompVal = nightCompletes; bestTimeOfDayStr = 'Night Shift (00:00 - 06:00)'; }
+    if (afternoonCompletes > maxCompVal) { maxCompVal = afternoonCompletes; bestTimeOfDayStr = 'Afternoon Traction (12:00 PM - 06:00 PM)'; }
+    if (eveningCompletes > maxCompVal) { maxCompVal = eveningCompletes; bestTimeOfDayStr = 'Evening Review (06:00 PM - 12:00 AM)'; }
+    if (nightCompletes > maxCompVal) { maxCompVal = nightCompletes; bestTimeOfDayStr = 'Night Shift (12:00 AM - 06:00 AM)'; }
 
     const smallTasks = list.filter(t => !t.subtasks || t.subtasks.length === 0);
     const smallRate = smallTasks.length === 0 ? 0 : Math.round((smallTasks.filter(t => t.status === 'completed').length / smallTasks.length) * 100);
@@ -399,7 +422,6 @@ export function InsightsPage({
       friction: 0
     };
 
-    // Ensure we count some base counts in simulated or sparse mode so it looks spectacular
     keywordsCounters.distracted = Math.max(1, refs.filter(r => r.text.toLowerCase().includes('distract') || r.text.toLowerCase().includes('slack')).length);
     keywordsCounters.scope = Math.max(1, refs.filter(r => r.text.toLowerCase().includes('big') || r.text.toLowerCase().includes('scope')).length);
     keywordsCounters.energy = Math.max(1, refs.filter(r => r.text.toLowerCase().includes('tired') || r.text.toLowerCase().includes('exhaust') || r.text.toLowerCase().includes('late')).length);
@@ -428,7 +450,7 @@ export function InsightsPage({
         solution: 'Target afternoon and evening slots for LIGHT admin reviews or documentation.'
       },
       { 
-        name: 'Action Activation Friction5', 
+        name: 'Action Activation Friction', 
         score: keywordsCounters.friction, 
         icon: '⚡', 
         description: 'Prolonged hesitation transition into the active primary focus screen.',
@@ -436,7 +458,6 @@ export function InsightsPage({
       }
     ].sort((a,b) => b.score - a.score);
 
-    // Energy Peak block type logic
     const deepCompletions = completed.filter(t => t.block === 'DEEP');
     const morningDeep = deepCompletions.filter(t => {
       const h = new Date(t.completedAt!).getHours();
@@ -449,7 +470,6 @@ export function InsightsPage({
 
     const deepPeakStr = morningDeep >= eveningDeep ? 'Morning Peak Focus' : 'Night Owl Hyperfocus';
 
-    // Sentiment trends calculated safely (positive vs negative ratios)
     const positiveWords = ["great", "success", "resolved", "completed", "positive", "happy", "achieved", "proud", "fluent", "motivation", "motivating", "fast", "easy", "clean", "easier", "helped", "learned", "strong"];
     const negativeWords = ["distracted", "failed", "unfocused", "struggled", "abandoned", "stuck", "tired", "anxious", "forgot", "friction", "difficult", "hard", "slow", "noise", "drifting", "exhausted", "late"];
 
@@ -471,8 +491,7 @@ export function InsightsPage({
     const sumCount = positiveRefsCount + negativeRefsCount;
     const overallSentimentRatio = sumCount === 0 ? 60 : Math.round((positiveRefsCount / sumCount) * 100);
 
-    // Weekly rolling productivity trends
-    const sevenDaysAgo = now - 7 * dayMs;
+    const sevenDaysAgo = Date.now() - 7 * dayMs;
     const activeThisWeek = list.filter(t => t.createdAt > sevenDaysAgo);
     const completedActiveThisWeek = activeThisWeek.filter(t => t.status === 'completed').length;
     const rateThisWeek = activeThisWeek.length === 0 ? 0 : Math.round((completedActiveThisWeek / activeThisWeek.length) * 100);
@@ -485,7 +504,6 @@ export function InsightsPage({
     const productivityTrend = productivityDifference >= 0 ? 'IMPROVING' : 'DECLINING';
     const sentimentTrend = overallSentimentRatio >= 50 ? 'IMPROVING' : 'DECLINING';
 
-    // Anomaly checks
     const velocityDrop = rateBefore > 0 ? ((rateBefore - rateThisWeek) / rateBefore) * 100 : 0;
     const anomalyDetected = velocityDrop > 20;
 
@@ -542,7 +560,7 @@ export function InsightsPage({
     });
     const avgCompleteDays = validCompleteTimes === 0 
       ? 0.8 
-      : parseFloat((totalCompleteTimeMs / (1024 * 1024 * 3.5 * 30 * 1000)).toFixed(1)); // days multiplier adjustment
+      : parseFloat((totalCompleteTimeMs / (1000 * 60 * 60 * 24)).toFixed(1));
 
     // Category Success Calculations
     const categoryStats = {
@@ -622,10 +640,10 @@ export function InsightsPage({
 
     // Completion by hours
     const hourBlocks = {
-      MORNING: 0, // 06:00 - 12:59
-      AFTERNOON: 0, // 13:00 - 17:59
-      EVENING: 0, // 18:00 - 23:59
-      NIGHT: 0, // 00:00 - 05:59
+      MORNING: 0,
+      AFTERNOON: 0,
+      EVENING: 0,
+      NIGHT: 0,
     };
     completed.forEach(t => {
       if (t.completedAt) {
@@ -638,11 +656,11 @@ export function InsightsPage({
     });
     const bestTimeSlot = (() => {
       let maxVal = -1;
-      let slot = 'Morning (06:00 - 12:00)';
-      if (hourBlocks.MORNING > maxVal) { maxVal = hourBlocks.MORNING; slot = 'Morning Focus (06:00 - 12:00)'; }
-      if (hourBlocks.AFTERNOON > maxVal) { maxVal = hourBlocks.AFTERNOON; slot = 'Afternoon Traction (13:00 - 18:00)'; }
-      if (hourBlocks.EVENING > maxVal) { maxVal = hourBlocks.EVENING; slot = 'Evening Review (18:00 - 24:00)'; }
-      if (hourBlocks.NIGHT > maxVal) { maxVal = hourBlocks.NIGHT; slot = 'Deep Night (00:00 - 06:00)'; }
+      let slot = 'Morning (06:00 AM - 12:00 PM)';
+      if (hourBlocks.MORNING > maxVal) { maxVal = hourBlocks.MORNING; slot = 'Morning Focus (06:00 AM - 12:00 PM)'; }
+      if (hourBlocks.AFTERNOON > maxVal) { maxVal = hourBlocks.AFTERNOON; slot = 'Afternoon Traction (12:00 PM - 06:00 PM)'; }
+      if (hourBlocks.EVENING > maxVal) { maxVal = hourBlocks.EVENING; slot = 'Evening Review (06:00 PM - 12:00 AM)'; }
+      if (hourBlocks.NIGHT > maxVal) { maxVal = hourBlocks.NIGHT; slot = 'Deep Night (12:00 AM - 06:00 AM)'; }
       return slot;
     })();
 
@@ -658,7 +676,8 @@ export function InsightsPage({
       NONE: 0
     };
     activeTimeLogs.forEach(log => {
-      const cat = log.category || 'NONE';
+      const task = activeDataset.find(t => t.id === log.taskId);
+      const cat = task ? task.category : 'NONE';
       if (categoryMinutes[cat] !== undefined) {
         categoryMinutes[cat] += Math.round(log.duration / 60);
       }
@@ -671,7 +690,8 @@ export function InsightsPage({
       FREE: 0
     };
     activeTimeLogs.forEach(log => {
-      const blk = log.blockType || 'FREE';
+      const task = activeDataset.find(t => t.id === log.taskId);
+      const blk = task ? (task.block || 'FREE') : 'FREE';
       if (blockMinutes[blk] !== undefined) {
         blockMinutes[blk] += Math.round(log.duration / 60);
       }
@@ -772,11 +792,9 @@ export function InsightsPage({
     const now = new Date();
     const list = activeDataset;
 
-    // We want 4 rows (weeks) with 7 cells (columns Sun-Sat)
-    // Find current weekday index
     const daysToSunday = now.getDay();
     const startDate = new Date();
-    startDate.setDate(now.getDate() - (27 + daysToSunday)); // Back 28 days + align to previous Sunday
+    startDate.setDate(now.getDate() - (27 + daysToSunday));
 
     for (let w = 0; w < 4; w++) {
       const weekRow = [];
@@ -786,7 +804,6 @@ export function InsightsPage({
         const dateStr = currentDate.toISOString().split('T')[0];
         const dayName = currentDate.toLocaleDateString('en-US', { weekday: 'short' });
         
-        // Count completions
         const count = list.filter(t => {
           if (t.status !== 'completed' || !t.completedAt) return false;
           return new Date(t.completedAt).toISOString().split('T')[0] === dateStr;
@@ -821,854 +838,1380 @@ export function InsightsPage({
       });
     }
 
-    return result.slice(0, 5); // Return top 5 maximum
+    return result.slice(0, 5);
   }, [activeDataset, drillDownCategory, drillDownBlock, selectedCalDay]);
 
-  // Highlight severity styling for heatmap completion loads
+  // Universally filtered dataset logs based on Analytics Search & Filter panel
+  const universallyFilteredLogs = useMemo(() => {
+    return activeDataset.filter(task => {
+      // 1. Text Query Search
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchesName = task.text.toLowerCase().includes(q);
+        const matchesSubtasks = task.subtasks?.some(s => s.title.toLowerCase().includes(q)) ?? false;
+        if (!matchesName && !matchesSubtasks) return false;
+      }
+
+      // 2. Block Type filter
+      if (filterBlockType !== 'ALL') {
+        if (task.block !== filterBlockType) return false;
+      }
+
+      // 3. Category classification
+      if (filterCategoryType !== 'ALL') {
+        const cat = task.category || 'NONE';
+        if (cat !== filterCategoryType) return false;
+      }
+
+      // 4. Status filter
+      if (filterStatusType !== 'ALL') {
+        if (task.status !== filterStatusType) return false;
+      }
+
+      return true;
+    });
+  }, [activeDataset, searchQuery, filterBlockType, filterCategoryType, filterStatusType]);
+
   const getDensityColor = (count: number) => {
     if (count === 0) return 'rgba(255, 255, 255, 0.03)';
-    if (count <= 1) return 'rgba(249, 115, 22, 0.25)'; // low orange
-    if (count <= 2) return 'rgba(249, 115, 22, 0.55)'; // mid orange
-    return 'rgba(249, 115, 22, 0.9)'; // rich solid orange
+    if (count <= 1) return 'rgba(249, 115, 22, 0.25)';
+    if (count <= 2) return 'rgba(249, 115, 22, 0.55)';
+    return 'rgba(249, 115, 22, 0.9)';
   };
+
+  // Structured list of daily actionable insights covering requested types
+  const dailyActionableInsights = useMemo(() => {
+    return [
+      {
+        id: 'insight-1',
+        type: 'Trend changes',
+        icon: '📈',
+        title: 'Discipline Velocity Surge',
+        statement: `Your focus resolve ratio currently registers at ${analytics.rate}% across all primary anchors. Your weekly execution output has boosted by ${behavioralAnalytics.productivityDiffPercent}% compared to prior blocks dynamically.`,
+        tip: 'Capitalize on this high-grade momentum by securing your next Primary Focus today before noon.',
+        date: new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+      },
+      {
+        id: 'insight-2',
+        type: 'Productivity patterns',
+        icon: '⚡',
+        title: 'Circadian Peak Concentration Window',
+        statement: `Your cognitive efficiency registers values during the ${behavioralAnalytics.bestTimeOfDayStr} slot. Resolves completed early have a substantially lower reschedule rate.`,
+        tip: "Decline secondary status checks, close communication feeds, and reserve this specific window exclusively for Deep work blocks.",
+        date: new Date(Date.now() - 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+      },
+      {
+        id: 'insight-3',
+        type: 'Blocker patterns',
+        icon: '⚠️',
+        title: 'Cognitive Attenuator Block',
+        statement: `"${behavioralAnalytics.blockersSummary[0]?.name || 'Digital Distraction'}" currently represents the highest friction score on your attention curves, causing minor checkpoint delays.`,
+        tip: 'Try closing Slack tabs and enabling an isolated quiet workspace prior to initiating active timers.',
+        date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+      },
+      {
+        id: 'insight-4',
+        type: 'Completion patterns',
+        icon: '🎓',
+        title: 'Task Partitioning Advantage',
+        statement: `Structuring objectives with subtasks secures a ${analytics.tasksWithSubRate}% completion rate on average, compared to just ${analytics.tasksNoSubRate}% for loose-form items.`,
+        tip: 'Continue deconstructing heavy anchors into 3 to 4 sequential checkpoints to simplify cognitive friction.',
+        date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+      },
+      {
+        id: 'insight-5',
+        type: 'Motivation milestones',
+        icon: '🏆',
+        title: 'Time-Box Precision Milestone',
+        statement: `Your calculated focus estimation congruence factor stands at ${analytics.estimationAccuracyRatio}%. Your deviation margin is just ${analytics.averageEstimationDeviationMinutes} minutes.`,
+        tip: 'Initiate the active dashboard stopwatch for every anchor task to further sharpen your temporal instinct.',
+        date: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+      }
+    ];
+  }, [analytics, behavioralAnalytics]);
+
+  // Navigate back and forth through one insight at a time
+  const handlePrevInsight = () => {
+    setActiveInsightIndex(prev => (prev === 0 ? dailyActionableInsights.length - 1 : prev - 1));
+  };
+
+  const handleNextInsight = () => {
+    setActiveInsightIndex(prev => (prev === dailyActionableInsights.length - 1 ? 0 : prev + 1));
+  };
+
+  const handleDismissInsight = (index: number) => {
+    setDismissedIndices(prev => [...prev, index]);
+    // Auto shift to next non-dismissed insight if available
+    let fallbackSelected = -1;
+    for (let i = 0; i < dailyActionableInsights.length; i++) {
+      const targetIndex = (index + i + 1) % dailyActionableInsights.length;
+      if (!dismissedIndices.includes(targetIndex) && targetIndex !== index) {
+        fallbackSelected = targetIndex;
+        break;
+      }
+    }
+    if (fallbackSelected !== -1) {
+      setActiveInsightIndex(fallbackSelected);
+    }
+  };
+
+  const handleRestoreInsights = () => {
+    setDismissedIndices([]);
+    setActiveInsightIndex(0);
+  };
+
+  const currentActiveInsight = dailyActionableInsights[activeInsightIndex];
+  const allInsightsDismissed = dismissedIndices.length === dailyActionableInsights.length;
 
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="space-y-6 text-white"
+      className="space-y-6 text-white min-h-[600px] pb-12 font-mono"
     >
-      {/* Upper Diagnostic Banner with toggle simulation */}
-      <section className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-zinc-950/40 p-4 border border-white/5">
-        <div>
-          <span className="text-[9px] font-mono tracking-[0.25em] uppercase text-orange-500 font-bold block animate-pulse">
-            Deep Cognitive Diagnostics
-          </span>
-          <h2 className="text-xl font-black tracking-tighter uppercase text-white leading-tight">
-            Advanced Analytics Engine
-          </h2>
-        </div>
-
-        {/* Live / Simulated Toggle */}
-        <div className="flex items-center gap-2 bg-[#050505] p-1 border border-white/10 shrink-0">
-          <button
-            onClick={() => {
-              setSimulationMode(false);
-              setSelectedCalDay(null);
-            }}
-            className={`px-3 py-1 font-mono text-[9px] uppercase font-bold tracking-widest transition-colors ${
-              !simulationMode ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'
-            }`}
-          >
-            Real Cache
-          </button>
-          
-          <button
-            onClick={() => {
-              setSimulationMode(true);
-              setSelectedCalDay(null);
-            }}
-            className={`px-3 py-1 font-mono text-[9px] uppercase font-bold tracking-widest transition-colors flex items-center gap-1.5 ${
-              simulationMode ? 'bg-orange-600 text-white' : 'text-zinc-500 hover:text-white'
-            }`}
-          >
-            <Sparkles className="w-2.5 h-2.5 animate-spin-slow" />
-            Simulate 30d
-          </button>
-        </div>
-      </section>
-
-      {/* Analytics Main Category tabs */}
-      <div className="flex border-b border-white/5 overflow-x-auto scrollbar-none scroll-smooth">
-        {(['DASHBOARD', 'COMPLETION_PATTERNS', 'COMPLEXITY', 'TIME_INTELLIGENCE', 'BEHAVIORAL_INSIGHTS'] as AnalyticsTab[]).map(tab => {
-          const isActive = activeTab === tab;
-          let label = 'Core Summary';
-          if (tab === 'COMPLETION_PATTERNS') label = 'Completion Dynamics';
-          if (tab === 'COMPLEXITY') label = 'Complexity Linkages';
-          if (tab === 'TIME_INTELLIGENCE') label = 'Time Intel';
-          if (tab === 'BEHAVIORAL_INSIGHTS') label = 'Behavioral Mining';
-
-          return (
-            <button
-              key={tab}
-              onClick={() => {
-                setActiveTab(tab);
-                // clear sub filters when tab shifts
-                setSelectedCalDay(null);
-              }}
-              className={`pb-2.5 pt-1 px-4 text-[10px] font-mono uppercase font-black tracking-widest border-b-2 shrink-0 transition-all ${
-                isActive 
-                  ? 'border-orange-500 text-white' 
-                  : 'border-transparent text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              {label}
-            </button>
-          );
-        })}
-      </div>
-
       <AnimatePresence mode="wait">
-        {/* TAB 1: DASHBOARD CORE SUMMARY */}
-        {activeTab === 'DASHBOARD' && (
+        
+        {/* VIEW 1: ONE ACTIONABLE INSIGHT AT A TIME (SINGLE DAILY INSIGHT CARD) */}
+        {!showAllAnalytics ? (
           <motion.div
-            key="dashboard-analysis"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
+            key="single-insight-view"
+            initial={{ opacity: 0, scale: 0.98, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.98, y: -15 }}
+            transition={{ duration: 0.3 }}
+            className="max-w-xl mx-auto space-y-6 pt-4"
+          >
+            {/* Header branding */}
+            <div className="text-center md:text-left">
+              <span className="text-[9px] font-mono tracking-[0.25em] uppercase text-orange-500 font-black block">
+                Daily Cognitive Signal
+              </span>
+              <h2 className="text-2xl font-black font-sans tracking-tight uppercase text-white mt-1">
+                Mindset Telemetry
+              </h2>
+              <p className="text-xs text-zinc-500 font-sans mt-1">
+                Neuro-flow diagnostics processed dynamically from your focus blocks and checkup logs.
+              </p>
+            </div>
+
+            {/* Simulated / Real toggle for calibration testing */}
+            <div className="flex justify-center md:justify-end">
+              <div className="flex items-center gap-1 bg-[#111215] p-1 border border-white/5 shrink-0 text-[8px]">
+                <button
+                  onClick={() => {
+                    setSimulationMode(false);
+                    setSelectedCalDay(null);
+                  }}
+                  className={`px-2.5 py-1 font-mono uppercase font-black tracking-widest transition-colors ${
+                    !simulationMode ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'
+                  }`}
+                >
+                  Real
+                </button>
+                <button
+                  onClick={() => {
+                    setSimulationMode(true);
+                    setSelectedCalDay(null);
+                  }}
+                  className={`px-2.5 py-1 font-mono uppercase font-black tracking-widest transition-colors flex items-center gap-1 ${
+                    simulationMode ? 'bg-orange-600 text-white' : 'text-zinc-500 hover:text-white'
+                  }`}
+                >
+                  <Sparkles className="w-2.5 h-2.5" />
+                  Simulate
+                </button>
+              </div>
+            </div>
+
+            {/* Dynamic Card Container */}
+            {!allInsightsDismissed ? (
+              <div className="bg-[#0b0c0e] border border-white/10 p-6 md:p-8 space-y-6 shadow-[0_0_50px_rgba(0,0,0,0.8)] relative overflow-hidden group">
+                {/* Background ambient accents */}
+                <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/[0.01] rounded-full blur-3xl pointer-events-none group-hover:bg-orange-500/[0.03] transition-colors" />
+                <div className="absolute bottom-0 left-0 w-32 h-32 bg-emerald-500/[0.01] rounded-full blur-3xl pointer-events-none" />
+
+                {/* Date stamp */}
+                <div className="flex justify-between items-baseline text-[9px] text-zinc-500 border-b border-white/5 pb-3">
+                  <span className="uppercase tracking-widest font-black text-orange-400">
+                    {currentActiveInsight.type} Index
+                  </span>
+                  <span className="font-mono text-zinc-650">
+                    {currentActiveInsight.date}
+                  </span>
+                </div>
+
+                {/* Core Insight content */}
+                <div className="space-y-4">
+                  <div className="flex items-start gap-4">
+                    <span className="text-4xl filter drop-shadow-[0_0_12px_rgba(255,255,255,0.1)] shrink-0 animate-pulse" style={{ animationDuration: '4s' }}>
+                      {currentActiveInsight.icon}
+                    </span>
+                    <div className="space-y-1.5 pt-1">
+                      <h3 className="text-base font-black text-white uppercase tracking-tight font-sans leading-none">
+                        {currentActiveInsight.title}
+                      </h3>
+                      <p className="text-xs text-zinc-300 font-sans leading-relaxed">
+                        {currentActiveInsight.statement}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Actionable Tip design block */}
+                  <div className="p-4 bg-orange-950/5 border border-orange-500/10 space-y-2 relative">
+                    <div className="absolute top-0 bottom-0 left-0 w-1 bg-orange-500/50" />
+                    <span className="text-[8.5px] uppercase font-black text-orange-400 tracking-[0.1em] block">
+                      💡 Actionable Refinement Tip
+                    </span>
+                    <p className="text-xs text-zinc-300 font-sans leading-relaxed">
+                      "{currentActiveInsight.tip}"
+                    </p>
+                  </div>
+                </div>
+
+                {/* Quick Nav Carousel pager */}
+                <div className="flex justify-between items-center border-t border-white/5 pt-4">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={handlePrevInsight}
+                      className="p-1 px-2 border border-white/5 bg-[#111215] hover:bg-zinc-900 text-zinc-400 hover:text-white transition-all text-[9px] uppercase tracking-wider font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      <ArrowLeft className="w-3 h-3" /> Prev
+                    </button>
+                    <span className="text-[10px] text-zinc-500 tracking-wider font-bold">
+                      {activeInsightIndex + 1} of {dailyActionableInsights.length}
+                    </span>
+                    <button
+                      onClick={handleNextInsight}
+                      className="p-1 px-2 border border-white/5 bg-[#111215] hover:bg-zinc-900 text-zinc-400 hover:text-white transition-all text-[9px] uppercase tracking-wider font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      Next <ArrowRight className="w-3 h-3" />
+                    </button>
+                  </div>
+                  
+                  {/* Indicators visual dots */}
+                  <div className="hidden sm:flex gap-1">
+                    {dailyActionableInsights.map((ins, idx) => {
+                      const isDismissed = dismissedIndices.includes(idx);
+                      const isCurrent = activeInsightIndex === idx;
+                      return (
+                        <span
+                          key={ins.id}
+                          className={`w-2 h-1.5 transition-all ${
+                            isCurrent 
+                              ? 'bg-orange-500' 
+                              : isDismissed 
+                                ? 'bg-zinc-800 line-through opacity-30' 
+                                : 'bg-zinc-700'
+                          }`}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* CARD ACTION BUTTONS */}
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <button
+                    onClick={() => handleDismissInsight(activeInsightIndex)}
+                    className="py-3 px-4 bg-[#111215] hover:bg-zinc-900 text-zinc-400 hover:text-white border border-white/10 hover:border-white/20 text-[10px] font-black uppercase text-center tracking-widest transition-all cursor-pointer"
+                  >
+                    Dismiss This
+                  </button>
+
+                  <button
+                    onClick={() => setShowAllAnalytics(true)}
+                    className="py-3 px-4 bg-[#e45423] hover:bg-orange-600 text-white text-[10px] font-black uppercase text-center tracking-widest transition-all flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    Learn More ➔
+                  </button>
+                </div>
+              </div>
+            ) : (
+              // DISMISSED COGNITIVE VIEW (No active insights remaining)
+              <div className="bg-[#0b0c0e] border border-white/10 p-8 text-center space-y-6 shadow-[0_0_40px_rgba(0,0,0,0.85)]">
+                <div className="flex justify-center">
+                  <div className="w-12 h-12 rounded-full bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400">
+                    <CheckCircle className="w-6 h-6 animate-pulse" />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <h3 className="text-base font-black text-white uppercase tracking-tight">
+                    No new insights today
+                  </h3>
+                  <p className="text-xs text-zinc-500 font-sans max-w-sm mx-auto leading-relaxed">
+                    You have successfully digested and managed all available cognitive alerts. Secure new focus blocks and submit Reflections to spawn further telemetry patterns.
+                  </p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+                  <button
+                    onClick={handleRestoreInsights}
+                    className="py-2.5 px-4 bg-[#111215] text-zinc-400 hover:text-white border border-white/5 hover:border-white/15 text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer"
+                  >
+                    🔄 Restore Insights
+                  </button>
+                  <button
+                    onClick={() => setShowAllAnalytics(true)}
+                    className="py-2.5 px-6 bg-white hover:bg-zinc-200 text-black text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer"
+                  >
+                    View All Analytics ➔
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Quick tips label at footer */}
+            <div className="p-4 rounded-none border border-white/5 bg-white/[0.01] flex gap-3 text-[10px] text-zinc-500">
+              <span className="font-bold text-orange-500">SYSTEM NOTE:</span>
+              <p className="font-sans leading-normal">
+                Reflections and task statuses are evaluated over active 7-day rolling performance cycles. The more data logged, the higher the confidence indexes of the calibration models.
+              </p>
+            </div>
+          </motion.div>
+        ) : (
+          
+          // VIEW 2: FULL DETAILED DETECTED ANALYTICS DASHBOARD
+          <motion.div
+            key="full-analytics-dashboard"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
             className="space-y-6"
           >
-            {/* Quick Metrics Cards Row */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="p-4 border border-white/5 bg-zinc-950/40 font-mono space-y-1">
-                <div className="text-[9px] text-zinc-500 uppercase tracking-widest">Resolve Ratio</div>
-                <div className="text-2xl font-black text-white">{analytics.rate}%</div>
-                <span className="text-[8px] text-zinc-600 block uppercase">Completions vs Drafts</span>
-              </div>
+            {/* Upper Navigation Back strip */}
+            <div className="flex justify-between items-center bg-[#090a0c] border border-white/5 p-4 py-3 font-mono">
+              <button
+                onClick={() => setShowAllAnalytics(false)}
+                className="flex items-center gap-1 text-[9.5px] text-orange-400 hover:text-white uppercase font-black tracking-widest transition-colors cursor-pointer"
+              >
+                ← Back to Daily Insight
+              </button>
 
-              <div className="p-4 border border-white/5 bg-zinc-950/40 font-mono space-y-1">
-                <div className="text-[9px] text-zinc-500 uppercase tracking-widest">Execution Velocity</div>
-                <div className="text-2xl font-black text-orange-400">{analytics.avgCompleteDays}d</div>
-                <span className="text-[8px] text-zinc-600 block uppercase">Avg duration to resolve</span>
-              </div>
-
-              <div className="p-4 border border-white/5 bg-zinc-950/40 font-mono space-y-1">
-                <div className="text-[9px] text-zinc-500 uppercase tracking-widest">Active Streak</div>
-                <div className="text-2xl font-black text-emerald-400 font-mono">{analytics.currentStreak}d</div>
-                <span className="text-[8px] text-zinc-600 block uppercase">Longest: {analytics.longestStreak}d</span>
-              </div>
-
-              <div className="p-4 border border-white/5 bg-zinc-950/40 font-mono space-y-1">
-                <div className="text-[9px] text-zinc-500 uppercase tracking-widest">Total Logs</div>
-                <div className="text-2xl font-black text-zinc-400">{analytics.total}</div>
-                <span className="text-[8px] text-zinc-600 block uppercase">{analytics.completed} resolved / {analytics.pending} active</span>
+              <div className="text-[9px] text-zinc-400 uppercase tracking-widest hidden md:block">
+                Comprehensive Diagnostic Mode
               </div>
             </div>
 
-            {/* Recharts Line trend Graph for last 30 days */}
-            <div className="p-5 border border-white/5 bg-zinc-950/40 space-y-4">
-              <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                <div className="flex items-center gap-1.5">
-                  <Activity className="w-3.5 h-3.5 text-orange-500 animate-pulse" />
-                  <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest font-black">
-                    30-Day Velocity Audit Grid
-                  </span>
-                </div>
-                <div className="flex items-center gap-4 text-[9px] font-mono">
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 bg-orange-500" /> Resolved</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 bg-zinc-600" /> Spawned</span>
-                </div>
-              </div>
-
-              <div className="w-full h-60">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={historicalTrendData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="solidCompleted" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#ea580c" stopOpacity={0.25}/>
-                        <stop offset="95%" stopColor="#ea580c" stopOpacity={0}/>
-                      </linearGradient>
-                      <linearGradient id="solidSpawned" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#52525b" stopOpacity={0.05}/>
-                        <stop offset="95%" stopColor="#52525b" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#27272a" opacity={0.2} />
-                    <XAxis 
-                      dataKey="label" 
-                      stroke="#52525b" 
-                      fontSize={8}
-                      tickLine={false}
-                      axisLine={false}
-                      dy={5}
-                      style={{ fontFamily: 'monospace' }}
-                    />
-                    <YAxis 
-                      stroke="#52525b" 
-                      fontSize={8}
-                      tickLine={false}
-                      axisLine={false}
-                      allowDecimals={false}
-                      style={{ fontFamily: 'monospace' }}
-                    />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: '#090a0c', border: '1px solid rgba(255, 255, 255, 0.1)', fontFamily: 'monospace', fontSize: '9px' }}
-                      itemStyle={{ color: '#ffffff' }}
-                      labelStyle={{ color: '#a1a1aa', fontWeight: 'bold' }}
-                    />
-                    <Area 
-                      type="monotone" 
-                      dataKey="Resolves" 
-                      stroke="#ea580c" 
-                      strokeWidth={2}
-                      fillOpacity={1} 
-                      fill="url(#solidCompleted)" 
-                      activeDot={{ r: 5, strokeWidth: 0, fill: '#ea580c' }}
-                    />
-                    <Area 
-                      type="monotone" 
-                      dataKey="AnchorsCreated" 
-                      stroke="#52525b" 
-                      strokeWidth={1}
-                      strokeDasharray="3 3"
-                      fillOpacity={1} 
-                      fill="url(#solidSpawned)" 
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Interactive Day Density Heatmap Grid */}
-            <div className="p-5 border border-white/5 bg-zinc-950/40 space-y-4">
-              <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                <div className="flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-zinc-400" />
-                  <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest font-black">
-                    Anchor Heatmap (Completions)
-                  </span>
-                </div>
-                <span className="text-[8px] font-mono text-zinc-500 uppercase">
-                  Click cell to inspect day
+            {/* Upper Diagnostic Banner with toggle simulation */}
+            <section className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-zinc-950/40 p-4 border border-white/5">
+              <div>
+                <span className="text-[9px] font-mono tracking-[0.25em] uppercase text-orange-500 font-bold block animate-pulse">
+                  Deep Cognitive Diagnostics
                 </span>
+                <h2 className="text-xl font-black tracking-tighter uppercase text-white leading-tight">
+                  Advanced Analytics Engine
+                </h2>
               </div>
 
-              {/* Grid matrix representation */}
-              <div className="flex flex-col space-y-2">
-                {/* Visual grid layout */}
-                <div className="grid grid-cols-7 gap-2">
-                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-                    <div key={d} className="text-center font-mono text-[8px] text-zinc-600 uppercase font-black">
-                      {d}
-                    </div>
-                  ))}
-                  
-                  {heatmapData.map((week, wIndex) => (
-                    <React.Fragment key={`week-${wIndex}`}>
-                      {week.map((day, dIndex) => {
-                        const isSelected = selectedCalDay === day.date;
-                        return (
-                          <button
-                            key={day.date}
-                            onClick={() => setSelectedCalDay(isSelected ? null : day.date)}
-                            onMouseEnter={() => setHoveredCalDay({ date: day.date, count: day.count })}
-                            onMouseLeave={() => setHoveredCalDay(null)}
-                            className="aspect-square border transition-all relative flex flex-col justify-end p-1 group"
-                            style={{ 
-                              backgroundColor: getDensityColor(day.count),
-                              borderColor: isSelected ? '#ffffff' : 'rgba(255, 255, 255, 0.05)'
-                            }}
-                          >
-                            <span className="text-[8px] font-mono text-zinc-500 group-hover:text-white leading-none">
-                              {new Date(day.date).getDate()}
-                            </span>
-                            
-                            {/* Micro indicators count */}
-                            {day.count > 0 && (
-                              <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-orange-500 inline-block rounded-none animate-pulse-subtle" />
-                            )}
-                          </button>
-                        );
-                      })}
-                    </React.Fragment>
-                  ))}
-                </div>
-
-                {/* Heatmap tooltip status description */}
-                <div className="h-5 flex items-center justify-between text-[8px] font-mono text-zinc-500 uppercase px-1">
-                  <div>
-                    {hoveredCalDay ? (
-                      <span className="text-orange-400 font-bold">
-                        {hoveredCalDay.date}: {hoveredCalDay.count} objectives resolved
-                      </span>
-                    ) : (
-                      <span>Hover cells to audit metric values</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span>Sparse</span>
-                    <span className="w-2 h-2" style={{ backgroundColor: getDensityColor(0) }} />
-                    <span className="w-2 h-2" style={{ backgroundColor: getDensityColor(1) }} />
-                    <span className="w-2 h-2" style={{ backgroundColor: getDensityColor(2) }} />
-                    <span className="w-2 h-2" style={{ backgroundColor: getDensityColor(3) }} />
-                    <span>Dense</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Day Drilldown Inspect panel */}
-              {selectedCalDay && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="p-4 bg-zinc-950 border border-white/10 space-y-3 font-mono"
+              {/* Live / Simulated Toggle */}
+              <div className="flex items-center gap-2 bg-[#050505] p-1 border border-white/10 shrink-0">
+                <button
+                  onClick={() => {
+                    setSimulationMode(false);
+                    setSelectedCalDay(null);
+                  }}
+                  className={`px-3 py-1 font-mono text-[9px] uppercase font-bold tracking-widest transition-colors ${
+                    !simulationMode ? 'bg-white text-black' : 'text-zinc-500 hover:text-white'
+                  }`}
                 >
-                  <div className="flex justify-between items-center text-[9px] text-zinc-400 font-black tracking-widest border-b border-white/5 pb-2 uppercase">
-                    <span>Audit Report: {selectedCalDay}</span>
+                  Real Cache
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setSimulationMode(true);
+                    setSelectedCalDay(null);
+                  }}
+                  className={`px-3 py-1 font-mono text-[9px] uppercase font-bold tracking-widest transition-colors flex items-center gap-1.5 ${
+                    simulationMode ? 'bg-orange-600 text-white' : 'text-zinc-500 hover:text-white'
+                  }`}
+                >
+                  <Sparkles className="w-2.5 h-2.5 animate-spin-slow" />
+                  Simulate 30d
+                </button>
+              </div>
+            </section>
+
+            {/* NEW ADDITION: DETAILED INTERACTIVE SEARCH & FILTER CORE PANEL */}
+            <section className="bg-[#0b0c0e] border border-white/10 p-5 space-y-4">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 border-b border-white/5 pb-3">
+                <div className="flex items-center gap-2">
+                  <Filter className="w-4 h-4 text-orange-500" />
+                  <span className="text-[10px] font-mono text-zinc-300 uppercase tracking-widest font-black">
+                    Interactive Log Search & Filter Explorer
+                  </span>
+                </div>
+                <div className="text-[8px] uppercase tracking-wider text-zinc-500">
+                  Matches: <span className="text-orange-400 font-bold">{universallyFilteredLogs.length}</span> / {activeDataset.length} Total Nodes
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                {/* 1. Search text field */}
+                <div className="relative font-mono">
+                  <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-zinc-600" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search task logs, keywords..."
+                    className="w-full bg-[#050505] border border-white/10 py-2 pl-9 pr-4 text-[10px] text-white focus:outline-none focus:border-orange-500 placeholder:text-zinc-600 uppercase tracking-widest transition-colors"
+                  />
+                  {searchQuery && (
                     <button 
-                      onClick={() => setSelectedCalDay(null)}
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2.5 top-2 text-zinc-500 hover:text-white text-[10px]"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {/* 2. Block Filter */}
+                <div className="flex flex-col space-y-1">
+                  <select
+                    value={filterBlockType}
+                    onChange={(e) => setFilterBlockType(e.target.value as any)}
+                    className="w-full bg-[#050505] border border-white/10 py-2.5 px-3 text-[10px] text-zinc-300 focus:outline-none focus:border-orange-500 uppercase font-mono tracking-widest uppercase"
+                  >
+                    <option value="ALL">All focus blocks</option>
+                    <option value="DEEP">DEEP Blocks</option>
+                    <option value="LIGHT">LIGHT Blocks</option>
+                    <option value="FREE">FREE Blocks</option>
+                  </select>
+                </div>
+
+                {/* 3. Category Filter */}
+                <div className="flex flex-col space-y-1">
+                  <select
+                    value={filterCategoryType}
+                    onChange={(e) => setFilterCategoryType(e.target.value as any)}
+                    className="w-full bg-[#050505] border border-white/10 py-2.5 px-3 text-[10px] text-zinc-300 focus:outline-none focus:border-orange-500 uppercase font-mono tracking-widest uppercase"
+                  >
+                    <option value="ALL">All Categories</option>
+                    <option value="KEEP">KEEP (Focus Core)</option>
+                    <option value="DELAY">DELAY (Deferred)</option>
+                    <option value="DELETE">DELETE (Chores)</option>
+                    <option value="NONE">Unsorted (NONE)</option>
+                  </select>
+                </div>
+
+                {/* 4. Status Filter */}
+                <div className="flex flex-col space-y-1">
+                  <select
+                    value={filterStatusType}
+                    onChange={(e) => setFilterStatusType(e.target.value as any)}
+                    className="w-full bg-[#050505] border border-white/10 py-2.5 px-3 text-[10px] text-zinc-300 focus:outline-none focus:border-orange-500 uppercase font-mono tracking-widest uppercase"
+                  >
+                    <option value="ALL">All states</option>
+                    <option value="completed">Resolved</option>
+                    <option value="pending">Active Draft</option>
+                    <option value="abandoned">Abandoned</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Expandable/Scrollable Search results grid if search active */}
+              {(searchQuery.trim() || filterBlockType !== 'ALL' || filterCategoryType !== 'ALL' || filterStatusType !== 'ALL') && (
+                <div className="border border-white/5 bg-[#050505] p-3 text-[10px] space-y-2 max-h-48 overflow-y-auto scrollbar-thin">
+                  <div className="flex justify-between items-center text-[8.5px] text-zinc-500 uppercase border-b border-white/5 pb-1">
+                    <span>Filtering Results Explorer</span>
+                    <button
+                      onClick={() => {
+                        setSearchQuery('');
+                        setFilterBlockType('ALL');
+                        setFilterCategoryType('ALL');
+                        setFilterStatusType('ALL');
+                      }}
                       className="text-orange-400 hover:text-white underline text-[8px]"
                     >
-                      Clear Filter
+                      Clear Filters
                     </button>
                   </div>
 
-                  <div className="space-y-2">
-                    {filteredTaskList.map(t => (
-                      <div key={t.id} className="p-2.5 border border-white/5 bg-[#090a0c] flex justify-between items-center text-xs">
-                        <div className="space-y-1">
-                          <span className="text-zinc-300 font-medium">{t.text}</span>
-                          <span className="text-[8px] text-zinc-600 block uppercase">
-                            Block: {t.block || 'None'} / Category: {t.category}
+                  <div className="space-y-1.5">
+                    {universallyFilteredLogs.map((item) => (
+                      <div 
+                        key={item.id} 
+                        className="p-2 border border-white/5 bg-[#0b0c0e] hover:bg-[#111215] transition-all flex justify-between items-center"
+                      >
+                        <div className="space-y-1 truncate max-w-[70%]">
+                          <span className="text-zinc-200 font-bold block truncate">{item.text}</span>
+                          <span className="text-[7.5px] text-zinc-500 block uppercase">
+                            Block: <strong className="text-zinc-400">{item.block || 'NONE'}</strong> / Category: <strong className="text-zinc-400">{item.category || 'NONE'}</strong> / Reschedules: <strong className="text-zinc-400">{(item as any).reschedules ?? 0}</strong>
                           </span>
                         </div>
-                        <span className="text-[8px] bg-emerald-990 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 uppercase tracking-wider">
-                          Resolved
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[7px] font-black uppercase px-2 py-0.5 border ${
+                            item.status === 'completed' 
+                              ? 'bg-emerald-950/20 text-emerald-400 border-emerald-500/20' 
+                              : item.status === 'abandoned' 
+                                ? 'bg-zinc-950 text-zinc-500 border-white/5 line-through'
+                                : 'bg-orange-950/20 text-orange-400 border-orange-500/20'
+                          }`}>
+                            {item.status === 'completed' ? 'Resolved' : item.status === 'abandoned' ? 'Abandoned' : 'Active'}
+                          </span>
+                        </div>
                       </div>
                     ))}
 
-                    {filteredTaskList.length === 0 && (
+                    {universallyFilteredLogs.length === 0 && (
                       <p className="text-center py-4 text-[9px] text-zinc-600 uppercase tracking-widest italic">
-                        No completes on this day.
+                        No matching nodes discovered in local dataset.
                       </p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </section>
+
+            {/* Analytics Main Category tabs */}
+            <div className="flex border-b border-white/5 overflow-x-auto scrollbar-none scroll-smooth">
+              {(['DASHBOARD', 'COMPLETION_PATTERNS', 'COMPLEXITY', 'TIME_INTELLIGENCE', 'BEHAVIORAL_INSIGHTS'] as AnalyticsTab[]).map(tab => {
+                const isActive = activeTab === tab;
+                let label = 'Core Summary';
+                if (tab === 'COMPLETION_PATTERNS') label = 'Completion Dynamics';
+                if (tab === 'COMPLEXITY') label = 'Complexity Linkages';
+                if (tab === 'TIME_INTELLIGENCE') label = 'Time Intel';
+                if (tab === 'BEHAVIORAL_INSIGHTS') label = 'Behavioral Mining';
+
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => {
+                      setActiveTab(tab);
+                      setSelectedCalDay(null);
+                    }}
+                    className={`pb-2.5 pt-1 px-4 text-[10px] font-mono uppercase font-black tracking-widest border-b-2 shrink-0 transition-all ${
+                      isActive 
+                        ? 'border-orange-500 text-white' 
+                        : 'border-transparent text-zinc-500 hover:text-zinc-300'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <AnimatePresence mode="wait">
+              {/* TAB 1: DASHBOARD CORE SUMMARY */}
+              {activeTab === 'DASHBOARD' && (
+                <motion.div
+                  key="dashboard-analysis"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  className="space-y-6"
+                >
+                  {/* Quick Metrics Cards Row */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="p-4 border border-white/5 bg-zinc-950/40 font-mono space-y-1">
+                      <div className="text-[9px] text-zinc-500 uppercase tracking-widest">Resolve Ratio</div>
+                      <div className="text-2xl font-black text-white">{analytics.rate}%</div>
+                      <span className="text-[8px] text-zinc-650 block uppercase font-bold">Completions vs Drafts</span>
+                    </div>
+
+                    <div className="p-4 border border-white/5 bg-zinc-950/40 font-mono space-y-1">
+                      <div className="text-[9px] text-zinc-500 uppercase tracking-widest">Execution Velocity</div>
+                      <div className="text-2xl font-black text-orange-400">{analytics.avgCompleteDays}d</div>
+                      <span className="text-[8px] text-zinc-650 block uppercase font-bold">Avg duration to resolve</span>
+                    </div>
+
+                    <div className="p-4 border border-white/5 bg-zinc-950/40 font-mono space-y-1">
+                      <div className="text-[9px] text-zinc-500 uppercase tracking-widest">Active Streak</div>
+                      <div className="text-2xl font-black text-emerald-400 font-mono">{analytics.currentStreak}d</div>
+                      <span className="text-[8px] text-zinc-650 block uppercase font-bold">Longest: {analytics.longestStreak}d</span>
+                    </div>
+
+                    <div className="p-4 border border-white/5 bg-zinc-950/40 font-mono space-y-1">
+                      <div className="text-[9px] text-zinc-500 uppercase tracking-widest">Total Logs</div>
+                      <div className="text-2xl font-black text-zinc-400">{analytics.total}</div>
+                      <span className="text-[8px] text-zinc-650 block uppercase font-bold">{analytics.completed} resolved / {analytics.pending} active</span>
+                    </div>
+                  </div>
+
+                  {/* Recharts Line trend Graph for last 30 days */}
+                  <div className="p-5 border border-white/5 bg-zinc-950/40 space-y-4">
+                    <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                      <div className="flex items-center gap-1.5">
+                        <Activity className="w-3.5 h-3.5 text-orange-500 animate-pulse" />
+                        <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest font-black">
+                          30-Day Velocity Audit Grid
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4 text-[9px] font-mono text-zinc-500">
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 bg-orange-500" /> Resolved</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 bg-zinc-600" /> Spawned</span>
+                      </div>
+                    </div>
+
+                    <div className="w-full h-60">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={historicalTrendData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="solidCompleted" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#ea580c" stopOpacity={0.25}/>
+                              <stop offset="95%" stopColor="#ea580c" stopOpacity={0}/>
+                            </linearGradient>
+                            <linearGradient id="solidSpawned" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#52525b" stopOpacity={0.05}/>
+                              <stop offset="95%" stopColor="#52525b" stopOpacity={0}/>
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#27272a" opacity={0.2} />
+                          <XAxis 
+                            dataKey="label" 
+                            stroke="#52525b" 
+                            fontSize={8}
+                            tickLine={false}
+                            axisLine={false}
+                            dy={5}
+                            style={{ fontFamily: 'monospace' }}
+                          />
+                          <YAxis 
+                            stroke="#52525b" 
+                            fontSize={8}
+                            tickLine={false}
+                            axisLine={false}
+                            allowDecimals={false}
+                            style={{ fontFamily: 'monospace' }}
+                          />
+                          <Tooltip 
+                            contentStyle={{ backgroundColor: '#090a0c', border: '1px solid rgba(255, 255, 255, 0.1)', fontFamily: 'monospace', fontSize: '9px' }}
+                            itemStyle={{ color: '#ffffff' }}
+                            labelStyle={{ color: '#a1a1aa', fontWeight: 'bold' }}
+                          />
+                          <Area 
+                            type="monotone" 
+                            dataKey="Resolves" 
+                            stroke="#ea580c" 
+                            strokeWidth={2}
+                            fillOpacity={1} 
+                            fill="url(#solidCompleted)" 
+                            activeDot={{ r: 5, strokeWidth: 0, fill: '#ea580c' }}
+                          />
+                          <Area 
+                            type="monotone" 
+                            dataKey="AnchorsCreated" 
+                            stroke="#52525b" 
+                            strokeWidth={1}
+                            strokeDasharray="3 3"
+                            fillOpacity={1} 
+                            fill="url(#solidSpawned)" 
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* Interactive Day Density Heatmap Grid */}
+                  <div className="p-5 border border-white/5 bg-zinc-950/40 space-y-4">
+                    <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                      <div className="flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5 text-zinc-400" />
+                        <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest font-black">
+                          Anchor Heatmap (Completions)
+                        </span>
+                      </div>
+                      <span className="text-[8px] font-mono text-zinc-500 uppercase">
+                        Click cell to inspect day
+                      </span>
+                    </div>
+
+                    {/* Grid matrix representation */}
+                    <div className="flex flex-col space-y-2">
+                      <div className="grid grid-cols-7 gap-2">
+                        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+                          <div key={d} className="text-center font-mono text-[8px] text-zinc-600 uppercase font-black">
+                            {d}
+                          </div>
+                        ))}
+                        
+                        {heatmapData.map((week, wIndex) => (
+                          <React.Fragment key={`week-${wIndex}`}>
+                            {week.map((day) => {
+                              const isSelected = selectedCalDay === day.date;
+                              return (
+                                <button
+                                  key={day.date}
+                                  onClick={() => setSelectedCalDay(isSelected ? null : day.date)}
+                                  onMouseEnter={() => setHoveredCalDay({ date: day.date, count: day.count })}
+                                  onMouseLeave={() => setHoveredCalDay(null)}
+                                  className="aspect-square border transition-all relative flex flex-col justify-end p-1 group"
+                                  style={{ 
+                                    backgroundColor: getDensityColor(day.count),
+                                    borderColor: isSelected ? '#ffffff' : 'rgba(255, 255, 255, 0.05)'
+                                  }}
+                                >
+                                  <span className="text-[8px] font-mono text-zinc-500 group-hover:text-white leading-none">
+                                    {new Date(day.date).getDate()}
+                                  </span>
+                                  
+                                  {day.count > 0 && (
+                                    <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-orange-500 inline-block rounded-none animate-pulse" />
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </React.Fragment>
+                        ))}
+                      </div>
+
+                      {/* Heatmap tooltip status description */}
+                      <div className="h-5 flex items-center justify-between text-[8px] font-mono text-zinc-500 uppercase px-1">
+                        <div>
+                          {hoveredCalDay ? (
+                            <span className="text-orange-400 font-bold">
+                              {hoveredCalDay.date}: {hoveredCalDay.count} objectives resolved
+                            </span>
+                          ) : (
+                            <span>Hover cells to audit metric values</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span>Sparse</span>
+                          <span className="w-2 h-2" style={{ backgroundColor: getDensityColor(0) }} />
+                          <span className="w-2 h-2" style={{ backgroundColor: getDensityColor(1) }} />
+                          <span className="w-2 h-2" style={{ backgroundColor: getDensityColor(2) }} />
+                          <span className="w-2 h-2" style={{ backgroundColor: getDensityColor(3) }} />
+                          <span>Dense</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Day Drilldown Inspect panel */}
+                    {selectedCalDay && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="p-4 bg-zinc-950 border border-white/10 space-y-3 font-mono"
+                      >
+                        <div className="flex justify-between items-center text-[9px] text-zinc-400 font-black tracking-widest border-b border-white/5 pb-2 uppercase">
+                          <span>Audit Report: {selectedCalDay}</span>
+                          <button 
+                            onClick={() => setSelectedCalDay(null)}
+                            className="text-orange-400 hover:text-white underline text-[8px]"
+                          >
+                            Clear Filter
+                          </button>
+                        </div>
+
+                        <div className="space-y-2">
+                          {filteredTaskList.map(t => (
+                            <div key={t.id} className="p-2.5 border border-white/5 bg-[#090a0c] flex justify-between items-center text-xs">
+                              <div className="space-y-1">
+                                <span className="text-zinc-300 font-medium">{t.text}</span>
+                                <span className="text-[8px] text-zinc-600 block uppercase font-bold">
+                                  Block: {t.block || 'None'} / Category: {t.category}
+                                </span>
+                              </div>
+                              <span className="text-[8px] bg-emerald-990 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 uppercase tracking-wider font-extrabold">
+                                Resolved
+                              </span>
+                            </div>
+                          ))}
+
+                          {filteredTaskList.length === 0 && (
+                            <p className="text-center py-4 text-[9px] text-zinc-600 uppercase tracking-widest italic">
+                              No completes on this day.
+                            </p>
+                          )}
+                        </div>
+                      </motion.div>
                     )}
                   </div>
                 </motion.div>
               )}
-            </div>
-          </motion.div>
-        )}
 
-        {/* TAB 2: COMPLETION PATTERNS */}
-        {activeTab === 'COMPLETION_PATTERNS' && (
-          <motion.div
-            key="completion-patterns-tab"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className="space-y-6 animate-fade-in"
-          >
-            {/* Side-by-side Progress rings comparing categories */}
-            <section className="bg-zinc-950/40 border border-white/5 p-5 space-y-4">
-              <div className="border-b border-white/5 pb-2">
-                <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest font-black block">
-                  Category Resolve Projections
-                </span>
-                <p className="text-[9px] text-zinc-500 leading-none mt-1">Interactively review completion ratios inside each category type.</p>
-              </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
-                {Object.keys(analytics.categoryStats).map((catName) => {
-                  const data = analytics.categoryStats[catName as Category];
-                  const ringColors = {
-                    KEEP: '#f97316',
-                    DELAY: '#3b82f6',
-                    DELETE: '#f43f5e',
-                    NONE: '#a1a1aa'
-                  };
-                  return (
-                    <div 
-                      key={catName} 
-                      onClick={() => setDrillDownCategory(drillDownCategory === catName ? 'ALL' : catName as Category)}
-                      className={`p-4 border text-center space-y-3 cursor-pointer transition-all ${
-                        drillDownCategory === catName 
-                          ? 'border-white bg-white/5' 
-                          : 'border-white/5 bg-[#090a0c]/40 hover:border-white/10'
-                      }`}
-                    >
-                      <label className="text-[10px] font-mono text-zinc-400 block font-bold tracking-widest uppercase">
-                        {catName}
-                      </label>
-                      <div className="flex justify-center">
-                        <ProgressRing 
-                          percent={data.rate} 
-                          color={ringColors[catName as 'KEEP' | 'DELAY' | 'DELETE' | 'NONE']} 
-                          size={74}
-                        />
-                      </div>
-                      <div className="text-[9px] font-mono text-zinc-500 uppercase font-semibold">
-                        {data.completed}/{data.total} Resolved
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-
-            {/* Block Type Effectiveness section */}
-            <section className="bg-zinc-950/40 border border-white/5 p-5 space-y-4">
-              <div className="border-b border-white/5 pb-2 flex justify-between items-center">
-                <div>
-                  <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest font-black block">
-                    Execution Block Effectiveness
-                  </span>
-                  <p className="text-[9px] text-zinc-500 leading-none mt-1">Which concentration window generates the highest resolve rate?</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                {Object.keys(analytics.blockStats).map((block) => {
-                  const info = analytics.blockStats[block as TimeBlockType];
-                  const col = block === 'DEEP' ? 'text-orange-500' : block === 'LIGHT' ? 'text-blue-400' : 'text-emerald-400';
-                  return (
-                    <div 
-                      key={block} 
-                      onClick={() => setDrillDownBlock(drillDownBlock === block ? 'ALL' : block as TimeBlockType)}
-                      className={`p-4 border text-center space-y-2 cursor-pointer transition-all ${
-                        drillDownBlock === block
-                          ? 'border-white bg-white/5'
-                          : 'border-white/5 bg-[#090a0c]/40 hover:border-white/10'
-                      }`}
-                    >
-                      <h4 className="text-[10px] font-mono font-black uppercase text-zinc-400 tracking-wider">
-                        {block} Block
-                      </h4>
-                      <div className="text-2xl font-black font-mono tracking-tighter text-white">
-                        {info.rate}%
-                      </div>
-                      <span className="text-[9px] font-mono text-zinc-500 block uppercase">
-                        {info.completed}/{info.total} resolved
+              {/* TAB 2: COMPLETION PATTERNS */}
+              {activeTab === 'COMPLETION_PATTERNS' && (
+                <motion.div
+                  key="completion-patterns-tab"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  className="space-y-6 animate-fade-in"
+                >
+                  {/* Side-by-side Progress rings comparing categories */}
+                  <section className="bg-zinc-950/40 border border-white/5 p-5 space-y-4">
+                    <div className="border-b border-white/5 pb-2">
+                      <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest font-black block">
+                        Category Resolve Projections
                       </span>
+                      <p className="text-[9px] text-zinc-500 mt-1">Interactively review completion ratios inside each category type.</p>
                     </div>
-                  );
-                })}
-              </div>
-            </section>
 
-            {/* Drilldown inspector list representing category or block click */}
-            {(drillDownCategory !== 'ALL' || drillDownBlock !== 'ALL') && (
-              <div className="p-4 bg-zinc-950 border border-white/10 space-y-3 font-mono">
-                <div className="flex justify-between items-center border-b border-white/5 pb-2 text-[10px] text-zinc-400 uppercase font-black">
-                  <span>
-                    Inspect Grid: {drillDownCategory !== 'ALL' ? drillDownCategory : ''} {drillDownBlock !== 'ALL' ? `${drillDownBlock} Block` : ''} Filters
-                  </span>
-                  <button 
-                    onClick={() => {
-                      setDrillDownCategory('ALL');
-                      setDrillDownBlock('ALL');
-                    }}
-                    className="text-orange-500 hover:text-white underline text-[8px]"
-                  >
-                    Reset Filters
-                  </button>
-                </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
+                      {Object.keys(analytics.categoryStats).map((catName) => {
+                        const data = analytics.categoryStats[catName as Category];
+                        const ringColors = {
+                          KEEP: '#f97316',
+                          DELAY: '#3b82f6',
+                          DELETE: '#f43f5e',
+                          NONE: '#a1a1aa'
+                        };
+                        return (
+                          <div 
+                            key={catName} 
+                            onClick={() => setDrillDownCategory(drillDownCategory === catName ? 'ALL' : catName as Category)}
+                            className={`p-4 border text-center space-y-3 cursor-pointer transition-all ${
+                              drillDownCategory === catName 
+                                ? 'border-white bg-white/5' 
+                                : 'border-white/5 bg-[#090a0c]/40 hover:border-white/10'
+                            }`}
+                          >
+                            <label className="text-[10px] font-mono text-zinc-400 block font-bold tracking-widest uppercase">
+                              {catName}
+                            </label>
+                            <div className="flex justify-center">
+                              <ProgressRing 
+                                percent={data.rate} 
+                                color={ringColors[catName as 'KEEP' | 'DELAY' | 'DELETE' | 'NONE']} 
+                                size={74}
+                              />
+                            </div>
+                            <div className="text-[9px] font-mono text-zinc-500 uppercase font-semibold">
+                              {data.completed}/{data.total} Resolved
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
 
-                <div className="space-y-2">
-                  {filteredTaskList.map(t => (
-                    <div key={t.id} className="p-2.5 border border-white/5 bg-[#050505] flex justify-between items-center text-xs">
+                  {/* Block Type Effectiveness section */}
+                  <section className="bg-zinc-950/40 border border-white/5 p-5 space-y-4">
+                    <div className="border-b border-white/5 pb-2 flex justify-between items-center">
                       <div>
-                        <span className="text-zinc-300 font-medium block">{t.text}</span>
-                        <span className="text-[8px] text-zinc-600 block uppercase">
-                          STATUS: {t.status} / CREATED: {new Date(t.createdAt).toLocaleDateString()}
+                        <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest font-black block">
+                          Execution Block Effectiveness
                         </span>
+                        <p className="text-[9px] text-zinc-500 mt-1">Which concentration window generates the highest resolve rate?</p>
                       </div>
-                      <ChevronRight className="w-4 h-4 text-zinc-700" />
                     </div>
-                  ))}
 
-                  {filteredTaskList.length === 0 && (
-                    <p className="text-center py-4 text-[9px] text-zinc-600 uppercase tracking-widest italic">
-                      No matching nodes.
-                    </p>
+                    <div className="grid grid-cols-3 gap-3">
+                      {Object.keys(analytics.blockStats).map((block) => {
+                        const info = analytics.blockStats[block as TimeBlockType];
+                        return (
+                          <div 
+                            key={block} 
+                            onClick={() => setDrillDownBlock(drillDownBlock === block ? 'ALL' : block as TimeBlockType)}
+                            className={`p-4 border text-center space-y-2 cursor-pointer transition-all ${
+                              drillDownBlock === block
+                                ? 'border-white bg-white/5'
+                                : 'border-white/5 bg-[#090a0c]/40 hover:border-white/10'
+                            }`}
+                          >
+                            <h4 className="text-[10px] font-mono font-black uppercase text-zinc-400 tracking-wider">
+                              {block} Block
+                            </h4>
+                            <div className="text-2xl font-black font-mono tracking-tighter text-white">
+                              {info.rate}%
+                            </div>
+                            <span className="text-[9px] font-mono text-zinc-500 block uppercase font-bold">
+                              {info.completed}/{info.total} resolved
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+
+                  {/* Drilldown inspector list representing category or block click */}
+                  {(drillDownCategory !== 'ALL' || drillDownBlock !== 'ALL') && (
+                    <div className="p-4 bg-zinc-950 border border-white/10 space-y-3 font-mono">
+                      <div className="flex justify-between items-center border-b border-white/5 pb-2 text-[10px] text-zinc-400 uppercase font-black">
+                        <span>
+                          Inspect Grid: {drillDownCategory !== 'ALL' ? drillDownCategory : ''} {drillDownBlock !== 'ALL' ? `${drillDownBlock} Block` : ''} Filters
+                        </span>
+                        <button 
+                          onClick={() => {
+                            setDrillDownCategory('ALL');
+                            setDrillDownBlock('ALL');
+                          }}
+                          className="text-orange-500 hover:text-white underline text-[8px]"
+                        >
+                          Reset Filters
+                        </button>
+                      </div>
+
+                      <div className="space-y-2">
+                        {filteredTaskList.map(t => (
+                          <div key={t.id} className="p-2.5 border border-white/5 bg-[#050505] flex justify-between items-center text-xs">
+                            <div>
+                              <span className="text-zinc-300 font-medium block">{t.text}</span>
+                              <span className="text-[8px] text-zinc-650 block uppercase font-bold">
+                                STATUS: {t.status} / CREATED: {new Date(t.createdAt).toLocaleDateString()}
+                              </span>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-zinc-700" />
+                          </div>
+                        ))}
+
+                        {filteredTaskList.length === 0 && (
+                          <p className="text-center py-4 text-[9px] text-zinc-600 uppercase tracking-widest italic">
+                            No matching nodes.
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   )}
-                </div>
-              </div>
-            )}
-          </motion.div>
-        )}
-
-        {/* TAB 3: TASK COMPLEXITY ANALYSIS */}
-        {activeTab === 'COMPLEXITY' && (
-          <motion.div
-            key="complexity-analysis-tab"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className="space-y-6"
-          >
-            {/* Side-by-side Progress Comparative Cards */}
-            <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              
-              {/* Card 1: Subtask Segment Divider check */}
-              <div className="border border-white/5 bg-zinc-950/40 p-5 space-y-4">
-                <div className="border-b border-white/5 pb-2">
-                  <span className="text-[10px] font-mono text-orange-400 font-bold uppercase tracking-wider block">
-                    Checklist Segment Leverage
-                  </span>
-                  <h3 className="text-xs font-black uppercase tracking-tight text-white mt-1">
-                    Checkpoint Partition rate
-                  </h3>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <ProgressRing percent={analytics.tasksWithSubRate} color="#f97316" size={64} />
-                  <div className="space-y-1 text-xs">
-                    <span className="font-bold text-white block">Tasks WITH Subtasks</span>
-                    <p className="text-[11px] text-zinc-400">
-                      Completed: <strong className="text-white">{analytics.tasksWithSubRate}%</strong>
-                    </p>
-                    <span className="text-[9px] font-mono text-zinc-500 uppercase">
-                      Total tracked: {analytics.subtasksCount} nodes
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4 pt-2 border-t border-white/5">
-                  <ProgressRing percent={analytics.tasksNoSubRate} color="#71717a" size={64} />
-                  <div className="space-y-1 text-xs">
-                    <span className="font-bold text-zinc-400 block">Tasks WITHOUT Subtasks</span>
-                    <p className="text-[11px] text-zinc-400">
-                      Completed: <strong className="text-white">{analytics.tasksNoSubRate}%</strong>
-                    </p>
-                    <span className="text-[9px] font-mono text-zinc-500 uppercase">
-                      High-friction direct logs
-                    </span>
-                  </div>
-                </div>
-
-                <p className="text-[10px] font-sans text-zinc-500 leading-relaxed pt-1.5 italic">
-                  *Analytical Takeaway: Deconstructing heavy objectives into smaller micro-milestones increases focus resolution by an average of 22%.
-                </p>
-              </div>
-
-              {/* Card 2: Dependency Lock Check */}
-              <div className="border border-white/5 bg-zinc-950/40 p-5 space-y-4">
-                <div className="border-b border-white/5 pb-2">
-                  <span className="text-[10px] font-mono text-blue-400 font-bold uppercase tracking-wider block">
-                    Pre-Requisite Network Audit
-                  </span>
-                  <h3 className="text-xs font-black uppercase tracking-tight text-white mt-1">
-                    Blocker Blockade Velocity
-                  </h3>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <ProgressRing percent={analytics.depRate} color="#3b82f6" size={64} />
-                  <div className="space-y-1 text-xs">
-                    <span className="font-bold text-white block">Chained/Locked Tasks</span>
-                    <p className="text-[11px] text-zinc-400">
-                      Completed: <strong className="text-white">{analytics.depRate}%</strong>
-                    </p>
-                    <span className="text-[9px] font-mono text-zinc-500 uppercase">
-                      Total prerequisites mapped: {analytics.depCount}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4 pt-2 border-t border-white/5">
-                  <ProgressRing percent={analytics.independentRate} color="#71717a" size={64} />
-                  <div className="space-y-1 text-xs">
-                    <span className="font-bold text-zinc-400 block">Independent Tasks</span>
-                    <p className="text-[11px] text-zinc-400">
-                      Completed: <strong className="text-white">{analytics.independentRate}%</strong>
-                    </p>
-                    <span className="text-[9px] font-mono text-zinc-500 uppercase">
-                      Single isolated nodes
-                    </span>
-                  </div>
-                </div>
-
-                <p className="text-[10px] font-sans text-zinc-500 leading-relaxed pt-1.5 italic">
-                  *Analytical Takeaway: Tasks locked behind rigid prerequisites run lower completion rates due to mental task blockades.
-                </p>
-              </div>
-
-            </section>
-
-            {/* Scope Creep Detection Warning audit list */}
-            <section className="bg-zinc-950/40 border border-white/5 p-5 space-y-4">
-              <div className="border-b border-white/5 pb-2 flex gap-2 items-center">
-                <AlertCircle className="w-4 h-4 text-orange-500" />
-                <div>
-                  <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest font-black block">
-                    Scope Creep Auditor
-                  </span>
-                  <p className="text-[9px] text-zinc-500 leading-none mt-1">Identifies overloaded anchors with expanding complexity bounds or excessive reschedules.</p>
-                </div>
-              </div>
-
-              <div className="space-y-2 max-h-[220px] overflow-y-auto scrollbar-thin">
-                {analytics.creepTasks.map(t => (
-                  <div key={t.id} className="p-3 border border-orange-500/10 bg-orange-950/5 flex justify-between items-center text-xs font-mono">
-                    <div className="space-y-1">
-                      <span className="text-zinc-200 block truncate max-w-[240px]">{t.text}</span>
-                      <span className="text-[8px] text-orange-500/80 uppercase font-bold block">
-                        Creep Alert: {t.subtasks.length > 3 ? `${t.subtasks.length} Checkpoints (High Structural Noise)` : 'Multiple tomorrow-shifts'}
-                      </span>
-                    </div>
-                    <span className="text-[9px] bg-amber-950/40 text-amber-400 border border-amber-500/20 px-2 py-0.5 uppercase tracking-wide shrink-0">
-                      OVERLOAD RISK
-                    </span>
-                  </div>
-                ))}
-
-                {analytics.creepTasks.length === 0 && (
-                  <div className="text-center py-6 text-[10px] font-mono text-zinc-600 uppercase tracking-widest italic border border-dashed border-white/5">
-                    No active scope creep detected. Design vectors are clean.
-                  </div>
-                )}
-              </div>
-            </section>
-          </motion.div>
-        )}
-
-        {/* TAB 4: TIME INTELLIGENCE */}
-        {activeTab === 'TIME_INTELLIGENCE' && (
-          <motion.div
-            key="time-intelligence-tab"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className="space-y-6 animate-fade-in"
-          >
-            {/* Time Tracking Overview Metrics Header */}
-            {timeTrackingEnabled && (
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="border border-white/5 bg-zinc-950/40 p-4 font-mono space-y-1">
-                  <span className="text-[9px] uppercase text-zinc-500 font-bold tracking-widest block">Focus Investment</span>
-                  <div className="text-xl font-black text-white">
-                    {Math.floor(analytics.totalDurationMinutes / 60)}h {analytics.totalDurationMinutes % 60}m
-                  </div>
-                  <span className="text-[8px] text-zinc-400 block uppercase">Across {activeTimeLogs.length} tracked blocks</span>
-                </div>
-
-                <div className="border border-white/5 bg-zinc-950/40 p-4 font-mono space-y-1">
-                  <span className="text-[9px] uppercase text-zinc-500 font-bold tracking-widest block">AI Estimate Accuracy</span>
-                  <div className="text-xl font-black text-emerald-400">
-                    {analytics.estimationAccuracyRatio}%
-                  </div>
-                  <span className="text-[8px] text-zinc-400 block uppercase">Estimate vs actual congruence</span>
-                </div>
-
-                <div className="border border-white/5 bg-zinc-950/40 p-4 font-mono space-y-1">
-                  <span className="text-[9px] uppercase text-zinc-500 font-bold tracking-widest block">Average Deviation</span>
-                  <div className="text-xl font-black text-amber-500">
-                    {analytics.averageEstimationDeviationMinutes} mins
-                  </div>
-                  <span className="text-[8px] text-zinc-400 block uppercase">Deviation margin per anchor</span>
-                </div>
-
-                <div className="border border-white/5 bg-zinc-950/40 p-4 font-mono space-y-1">
-                  <span className="text-[9px] uppercase text-zinc-500 font-bold tracking-widest block">Tracking Status</span>
-                  <div className="text-xl font-black text-orange-400 flex items-center gap-1.5">
-                    <Timer className="w-4 h-4 text-orange-500 animate-pulse" />
-                    ENABLED
-                  </div>
-                  <span className="text-[8px] text-zinc-400 block uppercase">Daily system active</span>
-                </div>
-              </div>
-            )}
-
-            {/* 30-Day Focus Time Trend Chart */}
-            {timeTrackingEnabled && (
-              <section className="border border-white/5 bg-zinc-950/40 p-5 space-y-4">
-                <div className="border-b border-white/5 pb-2 flex justify-between items-center">
-                  <div>
-                    <span className="text-[10px] uppercase text-zinc-400 font-mono font-black tracking-widest block">Historical Focus Investment</span>
-                    <p className="text-[9px] text-zinc-500 mt-1">Rolling 30-day view of cognitive hours logged vs daily tasks resolved.</p>
-                  </div>
-                  <div className="text-[8px] font-mono border border-white/10 px-2 py-0.5 text-zinc-400 uppercase tracking-widest">
-                    Telemetry Stream Active
-                  </div>
-                </div>
-
-                <div className="h-64 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={historicalTrendData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="focusGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#f97316" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="#f97316" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" />
-                      <XAxis dataKey="label" stroke="rgba(255,255,255,0.2)" fontSize={9} tickLine={false} />
-                      <YAxis stroke="rgba(255,255,255,0.2)" fontSize={9} tickLine={false} />
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: '#090a0c', border: '1px solid rgba(255,255,255,0.1)', fontSize: '10px', fontFamily: 'monospace' }}
-                        labelClassName="text-white font-mono"
-                      />
-                      <Area type="monotone" dataKey="FocusMinutes" name="Tracked Minutes" stroke="#f97316" fillOpacity={1} fill="url(#focusGradient)" strokeWidth={2} />
-                      <Area type="monotone" dataKey="Resolves" name="Resolves" stroke="#10b981" fillOpacity={0} strokeWidth={1} strokeDasharray="4 4" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </section>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              
-              {/* Category Time Allocation Breakdown (KEEP vs DELAY) */}
-              {timeTrackingEnabled && (
-                <div className="border border-white/5 bg-zinc-950/40 p-5 space-y-4 font-mono text-zinc-300">
-                  <div className="border-b border-white/5 pb-2">
-                    <span className="text-[10px] uppercase text-zinc-500 font-bold tracking-widest block">Attention Budget Breakdown</span>
-                    <h4 className="text-xs font-black text-white uppercase mt-1">Category Time Allotment</h4>
-                  </div>
-
-                  <div className="space-y-4 pt-1">
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-zinc-400">KEEP (Execution Core)</span>
-                        <span className="font-bold text-white">{analytics.categoryMinutes.KEEP} mins ({Math.round(analytics.categoryMinutes.KEEP / Math.max(1, analytics.totalDurationMinutes) * 100)}%)</span>
-                      </div>
-                      <div className="h-1.5 bg-white/5 w-full">
-                        <div className="h-full bg-orange-500" style={{ width: `${analytics.categoryMinutes.KEEP / Math.max(1, analytics.totalDurationMinutes) * 100}%` }} />
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-zinc-400">DELAY (Deferred Backlog)</span>
-                        <span className="font-bold text-white">{analytics.categoryMinutes.DELAY} mins ({Math.round(analytics.categoryMinutes.DELAY / Math.max(1, analytics.totalDurationMinutes) * 100)}%)</span>
-                      </div>
-                      <div className="h-1.5 bg-white/5 w-full">
-                        <div className="h-full bg-blue-500" style={{ width: `${analytics.categoryMinutes.DELAY / Math.max(1, analytics.totalDurationMinutes) * 100}%` }} />
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-zinc-400">DELETE (Housekeeping & Chores)</span>
-                        <span className="font-bold text-white">{analytics.categoryMinutes.DELETE} mins ({Math.round(analytics.categoryMinutes.DELETE / Math.max(1, analytics.totalDurationMinutes) * 100)}%)</span>
-                      </div>
-                      <div className="h-1.5 bg-white/5 w-full">
-                        <div className="h-full bg-rose-500" style={{ width: `${analytics.categoryMinutes.DELETE / Math.max(1, analytics.totalDurationMinutes) * 100}%` }} />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="pt-2 border-t border-white/5 text-[9px] text-zinc-500 leading-relaxed italic">
-                    *Efficiency Index: {Math.round((analytics.categoryMinutes.KEEP / Math.max(1, analytics.totalDurationMinutes)) * 100)}% of tracked time was focused on prime high-yield KEEP execution anchors.
-                  </div>
-                </div>
+                </motion.div>
               )}
 
-              {/* Hour slots details */}
-              <div className="border border-white/5 bg-zinc-950/40 p-5 space-y-4 font-mono">
-                <div className="border-b border-white/5 pb-2">
-                  <span className="text-[10px] uppercase text-zinc-500 font-bold tracking-widest block">Productivity Time Windows</span>
-                  <h4 className="text-xs font-black text-white uppercase mt-1">Peak Concentration Slots</h4>
-                </div>
-
-                <div className="space-y-2.5 text-xs text-zinc-300">
-                  <div className="flex justify-between items-center">
-                    <span>Morning Focus (06:00 - 12:00)</span>
-                    <span className="font-bold">{analytics.hourBlocks.MORNING} resolves</span>
-                  </div>
-                  <div className="h-1.5 bg-white/5 w-full">
-                    <div className="h-full bg-orange-600" style={{ width: `${analytics.hourBlocks.MORNING ? (analytics.hourBlocks.MORNING / Math.max(1, analytics.completed)) * 100 : 0}%` }} />
-                  </div>
-
-                  <div className="flex justify-between items-center pt-1">
-                    <span>Afternoon Traction (13:00 - 18:00)</span>
-                    <span className="font-bold">{analytics.hourBlocks.AFTERNOON} resolves</span>
-                  </div>
-                  <div className="h-1.5 bg-white/5 w-full">
-                    <div className="h-full bg-blue-500" style={{ width: `${analytics.hourBlocks.AFTERNOON ? (analytics.hourBlocks.AFTERNOON / Math.max(1, analytics.completed)) * 100 : 0}%` }} />
-                  </div>
-
-                  <div className="flex justify-between items-center pt-1">
-                    <span>Evening Review (18:00 - 24:00)</span>
-                    <span className="font-bold">{analytics.hourBlocks.EVENING} resolves</span>
-                  </div>
-                  <div className="h-1.5 bg-white/5 w-full">
-                    <div className="h-full bg-emerald-500" style={{ width: `${analytics.hourBlocks.EVENING ? (analytics.hourBlocks.EVENING / Math.max(1, analytics.completed)) * 100 : 0}%` }} />
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t border-white/5 bg-white/[0.01] p-3 text-[10px] text-zinc-400">
-                  <strong className="text-white block uppercase mb-1">Weekly Verdict</strong>
-                  Your absolute primary peak productivity hour slot occurs during <strong className="text-orange-400">{analytics.bestTimeSlot}</strong> on average.
-                </div>
-              </div>
-
-              {/* Block Type Focus Breakdown */}
-              {timeTrackingEnabled && (
-                <div className="border border-white/5 bg-zinc-950/40 p-5 space-y-4 font-mono text-zinc-300">
-                  <div className="border-b border-white/5 pb-2">
-                    <span className="text-[10px] uppercase text-zinc-500 font-bold tracking-widest block">Block Allocation Audit</span>
-                    <h4 className="text-xs font-black text-white uppercase mt-1">Window Investment Breakdown</h4>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center bg-zinc-900/40 p-3 border border-white/5">
-                      <div>
-                        <span className="text-xs text-white block uppercase font-bold">DEEP Focus</span>
-                        <p className="text-[9px] text-zinc-500 mt-0.5">High-cognitive target blocks</p>
+              {/* TAB 3: TASK COMPLEXITY ANALYSIS */}
+              {activeTab === 'COMPLEXITY' && (
+                <motion.div
+                  key="complexity-analysis-tab"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  className="space-y-6"
+                >
+                  <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    
+                    {/* Card 1: Subtask Segment Divider check */}
+                    <div className="border border-white/5 bg-zinc-950/40 p-5 space-y-4">
+                      <div className="border-b border-white/5 pb-2">
+                        <span className="text-[10px] font-mono text-orange-400 font-bold uppercase tracking-wider block">
+                          Checklist Segment Leverage
+                        </span>
+                        <h3 className="text-xs font-black uppercase tracking-tight text-white mt-1">
+                          Checkpoint Partition rate
+                        </h3>
                       </div>
-                      <div className="text-right">
-                        <span className="text-sm font-black text-orange-400 block">{analytics.blockMinutes.DEEP} mins</span>
-                        <span className="text-[9px] text-zinc-400 block font-semibold">{Math.round(analytics.blockMinutes.DEEP / Math.max(1, analytics.totalDurationMinutes) * 100)}% of focus</span>
+
+                      <div className="flex items-center gap-4">
+                        <ProgressRing percent={analytics.tasksWithSubRate} color="#f97316" size={64} />
+                        <div className="space-y-1 text-xs">
+                          <span className="font-bold text-white block">Tasks WITH Checkpoints</span>
+                          <p className="text-[11px] text-zinc-400">
+                            Completed: <strong className="text-white">{analytics.tasksWithSubRate}%</strong>
+                          </p>
+                          <span className="text-[9px] font-mono text-zinc-500 uppercase font-bold">
+                            Total tracked: {analytics.subtasksCount} nodes
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-4 pt-2 border-t border-white/5">
+                        <ProgressRing percent={analytics.tasksNoSubRate} color="#71717a" size={64} />
+                        <div className="space-y-1 text-xs">
+                          <span className="font-bold text-zinc-400 block">Tasks WITHOUT Checkpoints</span>
+                          <p className="text-[11px] text-zinc-400">
+                            Completed: <strong className="text-white">{analytics.tasksNoSubRate}%</strong>
+                          </p>
+                          <span className="text-[9px] font-mono text-zinc-500 uppercase font-bold">
+                            High-friction direct logs
+                          </span>
+                        </div>
+                      </div>
+
+                      <p className="text-[10px] font-sans text-zinc-500 leading-relaxed pt-1.5 italic">
+                        *Analytical Takeaway: Deconstructing heavy objectives into smaller micro-milestones increases focus resolution by an average of 22%.
+                      </p>
+                    </div>
+
+                    {/* Card 2: Dependency Lock Check */}
+                    <div className="border border-white/5 bg-zinc-950/40 p-5 space-y-4">
+                      <div className="border-b border-white/5 pb-2">
+                        <span className="text-[10px] font-mono text-blue-400 font-bold uppercase tracking-wider block">
+                          Pre-Requisite Network Audit
+                        </span>
+                        <h3 className="text-xs font-black uppercase tracking-tight text-white mt-1">
+                          Blocker Blockade Velocity
+                        </h3>
+                      </div>
+
+                      <div className="flex items-center gap-4">
+                        <ProgressRing percent={analytics.depRate} color="#3b82f6" size={64} />
+                        <div className="space-y-1 text-xs">
+                          <span className="font-bold text-white block">Chained/Locked Tasks</span>
+                          <p className="text-[11px] text-zinc-400">
+                            Completed: <strong className="text-white">{analytics.depRate}%</strong>
+                          </p>
+                          <span className="text-[9px] font-mono text-zinc-500 uppercase font-bold">
+                            Total prerequisites mapped: {analytics.depCount}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-4 pt-2 border-t border-white/5">
+                        <ProgressRing percent={analytics.independentRate} color="#71717a" size={64} />
+                        <div className="space-y-1 text-xs">
+                          <span className="font-bold text-zinc-400 block">Independent Tasks</span>
+                          <p className="text-[11px] text-zinc-400">
+                            Completed: <strong className="text-white">{analytics.independentRate}%</strong>
+                          </p>
+                          <span className="text-[9px] font-mono text-zinc-500 uppercase font-bold">
+                            Single isolated nodes
+                          </span>
+                        </div>
+                      </div>
+
+                      <p className="text-[10px] font-sans text-zinc-500 leading-relaxed pt-1.5 italic">
+                        *Analytical Takeaway: Tasks locked behind rigid prerequisites run lower completion rates due to mental task blockades.
+                      </p>
+                    </div>
+
+                  </section>
+
+                  {/* Scope Creep Detection Warning audit list */}
+                  <section className="bg-zinc-950/40 border border-white/5 p-5 space-y-4">
+                    <div className="border-b border-white/5 pb-2 flex gap-2 items-center">
+                      <AlertCircle className="w-4 h-4 text-orange-500" />
+                      <div>
+                        <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-widest font-black block">
+                          Scope Creep Auditor
+                        </span>
+                        <p className="text-[9px] text-zinc-500 leading-none mt-1">Identifies overloaded anchors with expanding complexity bounds or excessive reschedules.</p>
                       </div>
                     </div>
 
-                    <div className="flex justify-between items-center bg-zinc-900/40 p-3 border border-white/5">
-                      <div>
-                        <span className="text-xs text-white block uppercase font-bold">LIGHT Focus</span>
-                        <p className="text-[9px] text-zinc-500 mt-0.5">Quick triage, communications, emails</p>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-sm font-black text-blue-400 block">{analytics.blockMinutes.LIGHT} mins</span>
-                        <span className="text-[9px] text-zinc-400 block font-semibold">{Math.round(analytics.blockMinutes.LIGHT / Math.max(1, analytics.totalDurationMinutes) * 100)}% of focus</span>
-                      </div>
-                    </div>
+                    <div className="space-y-2 max-h-[220px] overflow-y-auto scrollbar-thin">
+                      {analytics.creepTasks.map(t => (
+                        <div key={t.id} className="p-3 border border-orange-500/10 bg-orange-950/5 flex justify-between items-center text-xs font-mono">
+                          <div className="space-y-1">
+                            <span className="text-zinc-200 block truncate max-w-[240px]">{t.text}</span>
+                            <span className="text-[8px] text-orange-500/80 uppercase font-bold block">
+                              Creep Alert: {t.subtasks.length > 3 ? `${t.subtasks.length} Checkpoints (High Structural Noise)` : 'Multiple tomorrow-shifts'}
+                            </span>
+                          </div>
+                          <span className="text-[9px] bg-amber-950/40 text-amber-400 border border-amber-500/20 px-2 py-0.5 uppercase tracking-wide shrink-0">
+                            OVERLOAD RISK
+                          </span>
+                        </div>
+                      ))}
 
-                    <div className="flex justify-between items-center bg-zinc-900/40 p-3 border border-white/5">
-                      <div>
-                        <span className="text-xs text-white block uppercase font-bold">FREE Flow</span>
-                        <p className="text-[9px] text-zinc-500 mt-0.5">Unscheduled reactive buffers</p>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-sm font-black text-emerald-400 block">{analytics.blockMinutes.FREE} mins</span>
-                        <span className="text-[9px] text-zinc-400 block font-semibold">{Math.round(analytics.blockMinutes.FREE / Math.max(1, analytics.totalDurationMinutes) * 100)}% of focus</span>
-                      </div>
+                      {analytics.creepTasks.length === 0 && (
+                        <div className="text-center py-6 text-[10px] font-mono text-zinc-600 uppercase tracking-widest italic border border-dashed border-white/5">
+                          No active scope creep detected. Design vectors are clean.
+                        </div>
+                      )}
                     </div>
-                  </div>
-                </div>
+                  </section>
+                </motion.div>
               )}
 
-              {/* Optimal block durations & context switching calculations */}
-              <div className="border border-white/5 bg-zinc-950/40 p-5 space-y-4">
-                <div className="border-b border-white/5 pb-2">
-                  <span className="text-[10px] font-mono text-orange-500 font-bold uppercase tracking-widest block">Attention Allocation Matrix</span>
-                  <h4 className="text-xs font-black text-white uppercase mt-1">Focus Durations & Penalty</h4>
-                </div>
+              {/* TAB 4: TIME INTELLIGENCE */}
+              {activeTab === 'TIME_INTELLIGENCE' && (
+                <motion.div
+                  key="time-intelligence-tab"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  className="space-y-6 animate-fade-in"
+                >
+                  {timeTrackingEnabled && (
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div className="border border-white/5 bg-zinc-950/40 p-4 font-mono space-y-1">
+                        <span className="text-[9px] uppercase text-zinc-500 font-bold tracking-widest block">Focus Investment</span>
+                        <div className="text-sm sm:text-base font-black text-white">
+                          {Math.floor(analytics.totalDurationMinutes / 60)}h {analytics.totalDurationMinutes % 60}m
+                        </div>
+                        <span className="text-[8px] text-zinc-400 block uppercase font-bold">Across {activeTimeLogs.length} tracked blocks</span>
+                      </div>
 
-                <div className="space-y-4 font-mono text-xs">
-                  <div className="p-3 bg-[#090a0c] border border-white/5 space-y-1.5">
-                    <div className="flex justify-between items-center font-bold text-white text-[11px] uppercase">
-                      <span>Optimal Block Dimension</span>
-                      <span className="text-orange-400">90-minute DEEP</span>
+                      <div className="border border-white/5 bg-zinc-950/40 p-4 font-mono space-y-1">
+                        <span className="text-[9px] uppercase text-zinc-500 font-bold tracking-widest block font-bold">Temporal Sync Factor</span>
+                        <div className="text-sm sm:text-base font-black text-emerald-400">
+                          {analytics.estimationAccuracyRatio}%
+                        </div>
+                        <span className="text-[8px] text-zinc-400 block uppercase font-bold font-mono">Estimate accuracy score</span>
+                      </div>
+
+                      <div className="border border-white/5 bg-zinc-950/40 p-4 font-mono space-y-1">
+                        <span className="text-[9px] uppercase text-zinc-500 font-bold tracking-widest block font-bold">Average Deviation</span>
+                        <div className="text-sm sm:text-base font-black text-amber-500">
+                          {analytics.averageEstimationDeviationMinutes} mins
+                        </div>
+                        <span className="text-[8px] text-zinc-400 block uppercase font-bold font-mono">Deviation margin per anchor</span>
+                      </div>
+
+                      <div className="border border-white/5 bg-zinc-950/40 p-4 font-mono space-y-1">
+                        <span className="text-[9px] uppercase text-zinc-500 font-bold tracking-widest block font-bold">Tracking Status</span>
+                        <div className="text-sm sm:text-base font-black text-orange-400 flex items-center gap-1.5">
+                          <Timer className="w-4 h-4 text-orange-500 animate-pulse" />
+                          ENABLED
+                        </div>
+                        <span className="text-[8px] text-zinc-400 block uppercase font-bold">Daily system active</span>
+                      </div>
                     </div>
-                    <p className="text-[10px] text-zinc-500 font-sans leading-relaxed">
-                      Deep Work blocks marked at 90 minutes average a resolve rate of <strong className="text-zinc-300">76%</strong> vs lighter chores. High cognitive isolation provides optimum compounding returns.
-                    </p>
+                  )}
+
+                  {/* 30-Day Focus Time Trend Chart */}
+                  {timeTrackingEnabled && (
+                    <section className="border border-white/5 bg-zinc-950/40 p-5 space-y-4">
+                      <div className="border-b border-white/5 pb-2 flex justify-between items-center">
+                        <div>
+                          <span className="text-[10px] uppercase text-zinc-400 font-mono font-black tracking-widest block">Historical Focus Investment</span>
+                          <p className="text-[9px] text-zinc-500 mt-1">Rolling 30-day view of cognitive hours logged vs daily tasks resolved.</p>
+                        </div>
+                        <div className="text-[8px] font-mono border border-white/10 px-2 py-0.5 text-zinc-400 uppercase tracking-widest hidden sm:block">
+                          Telemetry Stream Active
+                        </div>
+                      </div>
+
+                      <div className="h-64 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={historicalTrendData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                            <defs>
+                              <linearGradient id="focusGradient" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#f97316" stopOpacity={0.3}/>
+                                <stop offset="95%" stopColor="#f97316" stopOpacity={0}/>
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" />
+                            <XAxis dataKey="label" stroke="rgba(255,255,255,0.2)" fontSize={9} tickLine={false} />
+                            <YAxis stroke="rgba(255,255,255,0.2)" fontSize={9} tickLine={false} />
+                            <Tooltip 
+                              contentStyle={{ backgroundColor: '#090a0c', border: '1px solid rgba(255,255,255,0.1)', fontSize: '10px', fontFamily: 'monospace' }}
+                              labelClassName="text-white font-mono"
+                            />
+                            <Area type="monotone" dataKey="FocusMinutes" name="Tracked Minutes" stroke="#f97316" fillOpacity={1} fill="url(#focusGradient)" strokeWidth={2} />
+                            <Area type="monotone" dataKey="Resolves" name="Resolves" stroke="#10b981" fillOpacity={0} strokeWidth={1} strokeDasharray="4 4" />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </section>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    
+                    {/* Category Time Allocation Breakdown */}
+                    {timeTrackingEnabled && (
+                      <div className="border border-white/5 bg-zinc-950/40 p-5 space-y-4 font-mono text-zinc-300">
+                        <div className="border-b border-white/5 pb-2">
+                          <span className="text-[10px] uppercase text-zinc-500 font-bold tracking-widest block">Attention Budget Breakdown</span>
+                          <h4 className="text-xs font-black text-white uppercase mt-1">Category Time Allotment</h4>
+                        </div>
+
+                        <div className="space-y-4 pt-1">
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-zinc-400">KEEP (Execution Core)</span>
+                              <span className="font-bold text-white">{analytics.categoryMinutes.KEEP} mins ({Math.round(analytics.categoryMinutes.KEEP / Math.max(1, analytics.totalDurationMinutes) * 100)}%)</span>
+                            </div>
+                            <div className="h-1.5 bg-white/5 w-full">
+                              <div className="h-full bg-orange-500" style={{ width: `${analytics.categoryMinutes.KEEP / Math.max(1, analytics.totalDurationMinutes) * 100}%` }} />
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-zinc-400">DELAY (Deferred Backlog)</span>
+                              <span className="font-bold text-white">{analytics.categoryMinutes.DELAY} mins ({Math.round(analytics.categoryMinutes.DELAY / Math.max(1, analytics.totalDurationMinutes) * 100)}%)</span>
+                            </div>
+                            <div className="h-1.5 bg-white/5 w-full">
+                              <div className="h-full bg-blue-500" style={{ width: `${analytics.categoryMinutes.DELAY / Math.max(1, analytics.totalDurationMinutes) * 100}%` }} />
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="text-zinc-400 font-mono">DELETE (Chores & Admin)</span>
+                              <span className="font-bold text-white">{analytics.categoryMinutes.DELETE} mins ({Math.round(analytics.categoryMinutes.DELETE / Math.max(1, analytics.totalDurationMinutes) * 100)}%)</span>
+                            </div>
+                            <div className="h-1.5 bg-white/5 w-full">
+                              <div className="h-full bg-rose-500" style={{ width: `${analytics.categoryMinutes.DELETE / Math.max(1, analytics.totalDurationMinutes) * 100}%` }} />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-white/5 text-[9px] text-zinc-500 leading-relaxed italic font-bold">
+                          *Efficiency Index: {Math.round((analytics.categoryMinutes.KEEP / Math.max(1, analytics.totalDurationMinutes)) * 100)}% of tracked time was focused on prime high-yield KEEP execution anchors.
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Hour slots details */}
+                    <div className="border border-white/5 bg-zinc-950/40 p-5 space-y-4 font-mono">
+                      <div className="border-b border-white/5 pb-2">
+                        <span className="text-[10px] uppercase text-zinc-500 font-bold tracking-widest block">Productivity Time Windows</span>
+                        <h4 className="text-xs font-black text-white uppercase mt-1">Peak Concentration Slots</h4>
+                      </div>
+
+                      <div className="space-y-2.5 text-xs text-zinc-300">
+                        <div className="flex justify-between items-center">
+                          <span>Morning Focus (06:00 AM - 12:00 PM)</span>
+                          <span className="font-bold text-white">{analytics.hourBlocks.MORNING} resolves</span>
+                        </div>
+                        <div className="h-1.5 bg-white/5 w-full">
+                          <div className="h-full bg-orange-600" style={{ width: `${analytics.hourBlocks.MORNING ? (analytics.hourBlocks.MORNING / Math.max(1, analytics.completed)) * 100 : 0}%` }} />
+                        </div>
+
+                        <div className="flex justify-between items-center pt-1">
+                          <span>Afternoon Traction (12:00 PM - 06:00 PM)</span>
+                          <span className="font-bold text-white">{analytics.hourBlocks.AFTERNOON} resolves</span>
+                        </div>
+                        <div className="h-1.5 bg-white/5 w-full">
+                          <div className="h-full bg-blue-500" style={{ width: `${analytics.hourBlocks.AFTERNOON ? (analytics.hourBlocks.AFTERNOON / Math.max(1, analytics.completed)) * 100 : 0}%` }} />
+                        </div>
+
+                        <div className="flex justify-between items-center pt-1">
+                          <span>Evening Review (06:00 PM - 12:00 AM)</span>
+                          <span className="font-bold text-white">{analytics.hourBlocks.EVENING} resolves</span>
+                        </div>
+                        <div className="h-1.5 bg-white/5 w-full">
+                          <div className="h-full bg-emerald-500" style={{ width: `${analytics.hourBlocks.EVENING ? (analytics.hourBlocks.EVENING / Math.max(1, analytics.completed)) * 100 : 0}%` }} />
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-white/5 bg-white/[0.01] p-3 text-[10px] text-zinc-400 leading-normal">
+                        <strong className="text-white block uppercase mb-1 font-black">Weekly Verdict</strong>
+                        Your absolute primary peak productivity hour slot occurs during <strong className="text-orange-400">{analytics.bestTimeSlot}</strong> on average.
+                      </div>
+                    </div>
+
+                  </div>
+                </motion.div>
+              )}
+
+              {/* TAB 5: BEHAVIORAL INSIGHT DETAILED VIEW */}
+              {activeTab === 'BEHAVIORAL_INSIGHTS' && (
+                <motion.div
+                  key="behavioral-insights-tab"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  className="space-y-6"
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="border border-white/5 bg-zinc-950/40 p-5 space-y-4">
+                      <div className="border-b border-white/5 pb-2">
+                        <span className="text-[10px] font-mono text-rose-400 uppercase tracking-widest font-black block">Avoidance Meter Index</span>
+                        <h4 className="text-xs font-black text-white uppercase mt-1">Discipline Drift Curve</h4>
+                      </div>
+
+                      <div className="flex items-center gap-5">
+                        <ProgressRing percent={behavioralAnalytics.avoidanceScore} color="#f43f5e" size={72} />
+                        <div className="space-y-1 text-xs">
+                          <span className="font-bold block text-white uppercase tracking-wider">Avoidance Score</span>
+                          <p className="text-zinc-400">
+                            Current level: <strong className="text-white">{behavioralAnalytics.avoidanceScore}%</strong>
+                          </p>
+                          <span className={`text-[8.5px] border px-2 py-0.5 uppercase tracking-widest font-black inline-block ${
+                            behavioralAnalytics.avoidanceStatus === 'CRITICAL_AVOID_WARNING' 
+                              ? 'bg-red-950/30 text-rose-400 border-red-500/20' 
+                              : behavioralAnalytics.avoidanceStatus === 'MILD_DRIFT' 
+                                ? 'bg-amber-950/20 text-amber-400 border-amber-500/20' 
+                                : 'bg-emerald-950/20 text-emerald-400 border-emerald-500/20'
+                          }`}>
+                            {behavioralAnalytics.avoidanceStatus.replace(/_/g, ' ')}
+                          </span>
+                        </div>
+                      </div>
+
+                      <p className="text-[10px] text-zinc-500 font-sans leading-relaxed italic">
+                        *Refers to cumulative pending backlog shifts, task deferrals, and project cancellations calculated over consecutive 72-hour intervals.
+                      </p>
+                    </div>
+
+                    <div className="border border-white/5 bg-zinc-950/40 p-5 space-y-4">
+                      <div className="border-b border-white/5 pb-2">
+                        <span className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest font-black block">Reflective Sentiment Quotient</span>
+                        <h4 className="text-xs font-black text-white uppercase mt-1 font-sans">Cognitive Mindset Status</h4>
+                      </div>
+
+                      <div className="flex items-center gap-5">
+                        <ProgressRing percent={behavioralAnalytics.overallSentimentRatio} color="#10b981" size={72} />
+                        <div className="space-y-1 text-xs">
+                          <span className="font-bold block text-white uppercase">Focus Positive Rate</span>
+                          <p className="text-zinc-400 leading-normal">
+                            Cognitive Quotient: <strong className="text-white">{behavioralAnalytics.overallSentimentRatio}% Balanced</strong>
+                          </p>
+                          <span className="text-[8px] font-mono text-zinc-500 uppercase font-bold block">
+                            Evaluated across {behavioralAnalytics.refsLength} journal logs
+                          </span>
+                        </div>
+                      </div>
+
+                      <p className="text-[10px] text-zinc-500 font-sans leading-relaxed italic">
+                        *Evaluates emotional triggers (e.g. fatigue, flow, distraction) harvested from daily text logs automatically.
+                      </p>
+                    </div>
                   </div>
 
-                  <div className="p-3 bg-[#090a0c] border border-white/5 space-y-1.5">
-                    <div className="flex justify-between items-center font-bold text-white text-[11px] uppercase">
-                      <span>Context Switching Toll</span>
-                      <span className="text-red-400">High Risk Factor</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Common Friction Elements */}
+                    <div className="border border-white/5 bg-zinc-950/40 p-5 space-y-4 font-mono">
+                      <div className="border-b border-white/5 pb-2">
+                        <span className="text-[10px] uppercase text-zinc-500 font-bold tracking-widest block">Core Friction Blocks</span>
+                        <h4 className="text-xs font-black text-white uppercase mt-1">Execution Barriers Mapped</h4>
+                      </div>
+
+                      <div className="space-y-3 pt-1">
+                        {behavioralAnalytics.blockersSummary.map((block, i) => (
+                          <div key={block.name} className="p-3 bg-zinc-900/40 border border-white/5 space-y-1">
+                            <div className="flex justify-between items-baseline">
+                              <span className="text-xs font-bold text-zinc-300 uppercase shrink-0">
+                                {block.icon} {block.name}
+                              </span>
+                              <span className="text-[9px] text-[#e45423] font-black uppercase shrink-0">
+                                Friction Rank {i + 1}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-zinc-500 leading-relaxed font-sans mt-1">
+                              {block.description}
+                            </p>
+                            <div className="text-[9px] text-zinc-400 bg-black/40 p-1.5 border-l border-orange-500/50 mt-1.5 font-sans leading-relaxed italic">
+                              <strong>Recommended:</strong> {block.solution}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <p className="text-[10px] text-zinc-500 font-sans leading-relaxed">
-                      Frequent hopping across multiple categories increases mental overhead. Anchor tracking shows a <strong className="text-zinc-300">18% drop</strong> in speed when daily task tags exceed 3 configurations.
-                    </p>
+
+                    <div className="border border-white/5 bg-zinc-950/40 p-5 space-y-4 font-mono">
+                      <div className="border-b border-white/5 pb-2">
+                        <span className="text-[10px] uppercase text-zinc-500 font-bold tracking-widest block">Journeyman Refractive Milestones</span>
+                        <h4 className="text-xs font-black text-white uppercase mt-1">Weekly Journal Milestones</h4>
+                      </div>
+
+                      <div className="space-y-3 max-h-[350px] overflow-y-auto scrollbar-thin">
+                        {behavioralAnalytics.recentInsights.map(m => (
+                          <div key={m.id} className="p-3 border border-emerald-500/10 bg-emerald-950/5 space-y-1.5">
+                            <div className="flex justify-between items-center text-[8px] text-emerald-400 font-black">
+                              <span>💡 INSIGHT INDUCTION</span>
+                              <span>{m.date}</span>
+                            </div>
+                            <p className="text-[11px] text-zinc-300 font-sans leading-relaxed">
+                              "{m.text}"
+                            </p>
+                          </div>
+                        ))}
+
+                        {behavioralAnalytics.recentMistakes.map(m => (
+                          <div key={m.id} className="p-3 border border-rose-500/10 bg-rose-950/5 space-y-1.5">
+                            <div className="flex justify-between items-center text-[8px] text-rose-400 font-black">
+                              <span>⚠️ RETROSPECTIVE WARNING</span>
+                              <span>{m.date}</span>
+                            </div>
+                            <p className="text-[11px] text-zinc-300 font-sans leading-relaxed">
+                              "{m.text}"
+                            </p>
+                          </div>
+                        ))}
+
+                        {behavioralAnalytics.recentMistakes.length === 0 && behavioralAnalytics.recentInsights.length === 0 && (
+                          <div className="text-center py-10 text-[10px] text-zinc-500 uppercase tracking-widest italic border border-dashed border-white/5">
+                            No recent milestones detected. Submit daily reflections to build analytics streams.
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-
-                <div className="text-[9px] font-sans text-zinc-600 block italic leading-tight">
-                  *Methodology: Telemetry evaluates category variance count, block transitions, and completed intervals over consecutive 72-hour rolling windows.
-                </div>
-              </div>
-
-            </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
         )}
       </AnimatePresence>
-
     </motion.div>
   );
 }

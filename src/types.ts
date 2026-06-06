@@ -160,6 +160,7 @@ export interface DailyState {
   reflections: Reflection[];
   dailyTodos: { [date: string]: DailyTodo[] };
   goals?: Goal[]; // Optional or with custom default fallbacks
+  goalsEnabled?: boolean;
   timeBlocks?: TimeBlock[];
   blockTemplates?: BlockTemplate[];
   notificationSettings?: NotificationSettings;

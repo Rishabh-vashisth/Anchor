@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CheckCircle2, Circle, XCircle, Lock, Clock, ChevronDown, ChevronUp, Plus } from 'lucide-react';
-import { Task } from '../types';
+import { CheckCircle2, Circle, XCircle, Lock, Clock, ChevronDown, ChevronUp, Plus, Target } from 'lucide-react';
+import { Task, Goal } from '../types';
 
 interface TaskItemProps {
   key?: string;
   task: Task;
+  goals?: Goal[];
   onToggle: (id: string) => void;
   onAbandon?: (id: string) => void;
   onAction?: (id: string) => void;
@@ -13,6 +14,7 @@ interface TaskItemProps {
   onToggleSubtask?: (taskId: string, subtaskId: string) => void;
   onSetDependency?: (taskId: string, dependsOnId: string | null) => void;
   onSetStartDate?: (taskId: string, startDate: number | null) => void;
+  onLinkGoal?: (taskId: string, goalId: string | null) => void;
   actionLabel?: string;
   dependency?: Task | null;
   allTasks?: Task[];
@@ -20,6 +22,7 @@ interface TaskItemProps {
 
 export function TaskItem({ 
   task, 
+  goals = [],
   onToggle, 
   onAbandon, 
   onAction, 
@@ -27,6 +30,7 @@ export function TaskItem({
   onToggleSubtask,
   onSetDependency,
   onSetStartDate,
+  onLinkGoal,
   actionLabel,
   dependency,
   allTasks
@@ -34,6 +38,7 @@ export function TaskItem({
   const [isExpanded, setIsExpanded] = useState(false);
   const [newSubtask, setNewSubtask] = useState('');
   const [showSettings, setShowSettings] = useState(false);
+  const [showGoalDetails, setShowGoalDetails] = useState(false);
   
   const isCompleted = task.status === 'completed';
   const isAbandoned = task.status === 'abandoned';
@@ -51,6 +56,8 @@ export function TaskItem({
       setNewSubtask('');
     }
   };
+
+  const linkedGoal = goals.find(g => g.id === task.goalId);
 
   return (
     <motion.div 
@@ -95,6 +102,87 @@ export function TaskItem({
               <span className="text-[9px] font-mono text-blue-400/60 uppercase tracking-wider flex items-center gap-1">
                 <Clock className="w-2 h-2" /> Starts {new Date(task.startDate!).toLocaleDateString()}
               </span>
+            )}
+
+            {linkedGoal && (
+              <div className="mt-1.5 flex flex-col gap-1.5 align-baseline">
+                <div className="inline-flex items-center gap-1.5 text-[10.5px]">
+                  <span className="text-zinc-500 font-mono text-[9px] uppercase tracking-wide">This serves:</span>
+                  <button 
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowGoalDetails(!showGoalDetails);
+                    }}
+                    className="text-orange-400 hover:text-orange-300 underline underline-offset-2 transition-colors font-mono font-bold text-left flex items-center gap-1 text-[10px]"
+                    title="Click to view goal progress details"
+                  >
+                    <Target className="w-3 h-3 text-[#e25424] animate-pulse" />
+                    <span>{linkedGoal.title}</span>
+                  </button>
+                </div>
+
+                <AnimatePresence>
+                  {showGoalDetails && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="mt-1 bg-white border border-zinc-200 p-3 shadow-2xl relative overflow-hidden text-zinc-900 rounded-none w-full max-w-md font-sans"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex justify-between items-start border-b border-zinc-100 pb-1.5 mb-2">
+                        <div>
+                          <span className="text-[8px] font-mono font-black uppercase tracking-widest text-[#e25424]">Goal Alignment Status</span>
+                          <h4 className="text-xs font-extrabold text-zinc-900 mt-0.5 leading-tight">{linkedGoal.title}</h4>
+                        </div>
+                        <span className="text-[8px] font-mono font-bold bg-zinc-100 border border-zinc-200 px-2 py-0.5 uppercase tracking-wider text-zinc-655 shrink-0 ml-2">
+                          {linkedGoal.type}
+                        </span>
+                      </div>
+                      
+                      {(() => {
+                        const krs = linkedGoal.keyResults || [];
+                        const completedKrs = krs.filter(kr => kr.completed).length;
+                        const progress = krs.length > 0 ? Math.round((completedKrs / krs.length) * 100) : 0;
+                        return (
+                          <div className="space-y-2">
+                            <div className="flex justify-between text-[10px] text-zinc-600 font-mono">
+                              <span>Objective Progress:</span>
+                              <span className="font-bold text-zinc-950">{progress}%</span>
+                            </div>
+                            <div className="h-1 bg-zinc-100 border border-zinc-200/50 overflow-hidden">
+                              <div className="h-full bg-zinc-900 transition-all duration-300" style={{ width: `${progress}%` }} />
+                            </div>
+
+                            <div className="flex justify-between text-[9px] text-zinc-450 font-mono border-t border-zinc-100 pt-1.5">
+                              <span>Target complete:</span>
+                              <span className="text-zinc-700 font-bold">{linkedGoal.targetDate}</span>
+                            </div>
+
+                            {krs.length > 0 && (
+                              <div className="space-y-1 pt-1 border-t border-zinc-100">
+                                <span className="text-[8.5px] uppercase font-bold text-zinc-450 block font-mono">Key Actions Checklist:</span>
+                                <div className="space-y-1">
+                                  {krs.map(kr => (
+                                    <div key={kr.id} className="flex items-start gap-1.5 text-[10.5px] text-zinc-700">
+                                      <span className={`w-3 h-3 border flex items-center justify-center shrink-0 mt-0.5 ${kr.completed ? 'bg-zinc-800 border-zinc-800 text-white' : 'border-zinc-300 text-transparent'}`}>
+                                        ✓
+                                      </span>
+                                      <span className={kr.completed ? 'line-through text-zinc-400' : ''}>{kr.text}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             )}
           </div>
         </div>
@@ -242,7 +330,7 @@ export function TaskItem({
                     <select 
                       value={task.dependsOn || ''}
                       onChange={(e) => onSetDependency && onSetDependency(task.id, e.target.value || null)}
-                      className="w-full bg-black border border-white/10 text-[10px] p-2 focus:outline-none focus:border-white/30"
+                      className="w-full bg-black border border-white/10 text-[10px] p-2 focus:outline-none focus:border-white/30 text-white"
                     >
                       <option value="">None</option>
                       {allTasks?.filter(t => t.id !== task.id).map(t => (
@@ -250,6 +338,22 @@ export function TaskItem({
                       ))}
                     </select>
                   </div>
+
+                  {onLinkGoal && goals.length > 0 && (
+                    <div className="space-y-2">
+                      <label className="text-[9px] font-mono text-white/30 uppercase tracking-widest block">Strategic Goal Alignment</label>
+                      <select 
+                        value={task.goalId || ''}
+                        onChange={(e) => onLinkGoal(task.id, e.target.value || null)}
+                        className="w-full bg-black border border-white/10 text-[10px] p-2 focus:outline-none focus:border-white/30 text-white"
+                      >
+                        <option value="">None (Unlinked)</option>
+                        {goals.map(g => (
+                          <option key={g.id} value={g.id}>🎯 {g.title} ({g.type})</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   <div className="space-y-2">
                     <label className="text-[9px] font-mono text-white/30 uppercase tracking-widest block">Start Date</label>

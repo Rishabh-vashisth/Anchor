@@ -157,6 +157,7 @@ export function useAnchorState() {
             lastUpdated: g.lastUpdated || Date.now(),
             ...g
           })),
+          goalsEnabled: parsed.goalsEnabled !== undefined ? parsed.goalsEnabled : false,
           timeBlocks: parsed.timeBlocks || DEFAULT_TIME_BLOCKS,
           blockTemplates: parsed.blockTemplates || DEFAULT_TEMPLATES,
           notificationSettings: parsed.notificationSettings || DEFAULT_NOTIFICATION_SETTINGS,
@@ -205,6 +206,7 @@ export function useAnchorState() {
           lastUpdated: g.lastUpdated || Date.now(),
           ...g
         })),
+        goalsEnabled: parsed.goalsEnabled !== undefined ? parsed.goalsEnabled : false,
         timeBlocks: parsed.timeBlocks || DEFAULT_TIME_BLOCKS,
         blockTemplates: parsed.blockTemplates || DEFAULT_TEMPLATES,
         notificationSettings: parsed.notificationSettings || DEFAULT_NOTIFICATION_SETTINGS,
@@ -237,6 +239,7 @@ export function useAnchorState() {
       reflections: [],
       dailyTodos: {},
       goals: [],
+      goalsEnabled: false,
       timeBlocks: DEFAULT_TIME_BLOCKS,
       blockTemplates: DEFAULT_TEMPLATES,
       notificationSettings: DEFAULT_NOTIFICATION_SETTINGS,
@@ -488,18 +491,27 @@ export function useAnchorState() {
     });
   };
 
-  const addTask = (text: string) => {
+  const addTask = (text: string, category: Category = 'NONE', isPrimaryOrGoalId: boolean | string | null = null) => {
+    const newTaskId = crypto.randomUUID();
+    const isPrimary = typeof isPrimaryOrGoalId === 'boolean' ? isPrimaryOrGoalId : false;
+    const goalId = typeof isPrimaryOrGoalId === 'string' ? isPrimaryOrGoalId : null;
+    
     const newTask: Task = {
-      id: crypto.randomUUID(),
+      id: newTaskId,
       text,
       status: 'pending',
-      category: 'NONE',
+      category: category,
       createdAt: Date.now(),
       subtasks: [],
       dependsOn: null,
       startDate: null,
+      goalId: goalId,
     };
-    setState(prev => ({ ...prev, tasks: [newTask, ...(prev.tasks || [])] }));
+    setState(prev => ({ 
+      ...prev, 
+      tasks: [newTask, ...(prev.tasks || [])],
+      primaryTaskId: isPrimary ? newTaskId : prev.primaryTaskId
+    }));
   };
 
   const addIdea = (text: string) => {
@@ -894,6 +906,15 @@ export function useAnchorState() {
     }));
   };
 
+  const updateTaskText = (taskId: string, text: string) => {
+    setState(prev => ({
+      ...prev,
+      tasks: (prev.tasks || []).map(t => 
+        t.id === taskId ? { ...t, text } : t
+      )
+    }));
+  };
+
   const toggleTimeTracking = () => {
     setState(prev => ({
       ...prev,
@@ -1144,8 +1165,16 @@ export function useAnchorState() {
     window.location.reload();
   };
 
+  const toggleGoalsFeature = () => {
+    setState(prev => ({
+      ...prev,
+      goalsEnabled: !prev.goalsEnabled
+    }));
+  };
+
     return {
     state,
+    toggleGoalsFeature,
     addTask,
     addIdea,
     processIdea,
@@ -1178,6 +1207,7 @@ export function useAnchorState() {
     stopTimer,
     addManualTimeLog,
     updateTaskEstimate,
+    updateTaskText,
     toggleTimeTracking,
     updateDailyTimeBudget,
     addTimeBlock,
